@@ -194,9 +194,82 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
         before.ShouldBeEmpty();
     }
 
-    private async Task<(SqlWalletStore Store, string ConnectionString)> WalletAsync()
+    [Fact]
+    public async Task Stored_balances_after_match_the_running_sums_when_posted_and_after_the_backfill()
     {
-        var connectionString = await sql.CreateDatabaseAsync("v2_" + Guid.NewGuid().ToString("N")[..10]);
+        var (store, connectionString) = await WalletAsync();
+        var transfer = new TransferHandler(new PostingRunner(store), FixedRules.None, _time);
+        var reserve = new ReserveFundsHandler(new PostingRunner(store), FixedRules.None, _time);
+        await transfer.DepositAsync("deposit_b1", Punter, 5_000, "ZAR", "pay_b1");
+        await reserve.HandleAsync("b_reserve", Punter, 2_000, "ZAR", "b");
+        await reserve.HoldWithdrawalAsync("wdb_hold", Punter, 1_000, "ZAR", "wdb");
+        await using var connection = new SqlConnection(connectionString);
+        const string Stored = "SELECT Sequence, MAX(AvailableAfter) AS A, MAX(BonusAfter) AS B FROM wallet.LedgerEntries WHERE AccountId = @Punter GROUP BY Sequence ORDER BY Sequence";
+        const string Computed = """
+            SELECT p.Sequence,
+                   SUM(SUM(CASE WHEN e.Bucket = 1 THEN e.Amount ELSE 0 END)) OVER (ORDER BY p.Sequence ROWS UNBOUNDED PRECEDING) AS A,
+                   SUM(SUM(CASE WHEN e.Bucket = 3 THEN e.Amount ELSE 0 END)) OVER (ORDER BY p.Sequence ROWS UNBOUNDED PRECEDING) AS B
+            FROM wallet.LedgerEntries e JOIN wallet.Postings p ON p.PostingId = e.PostingId
+            WHERE e.AccountId = @Punter GROUP BY p.Sequence ORDER BY p.Sequence
+            """;
+        var expected = (await connection.QueryAsync<(long, long?, long?)>(Computed, new { Punter })).ToList();
+
+        (await connection.QueryAsync<(long, long?, long?)>(Stored, new { Punter })).ShouldBe(expected);
+        expected.Count.ShouldBe(4);
+
+        await connection.ExecuteAsync(MigratorRollback("0011_statement_balances"));
+        await WalletAsync(connectionString);
+        (await connection.QueryAsync<(long, long?, long?)>(Stored, new { Punter })).ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task An_entry_for_an_account_the_posting_did_not_load_is_still_written_with_no_balance()
+    {
+        var (store, connectionString) = await WalletAsync();
+        await new TransferHandler(new PostingRunner(store), FixedRules.None, _time).DepositAsync("deposit_h1", Punter, 5_000, "ZAR", "pay_h1");
+        await using var connection = new SqlConnection(connectionString);
+
+        var entries = (await connection.QueryAsync<(Guid AccountId, long? Sequence, long? AvailableAfter)>("""
+            SELECT e.AccountId, e.Sequence, e.AvailableAfter FROM wallet.LedgerEntries e JOIN wallet.Postings p ON p.PostingId = e.PostingId
+            WHERE p.IdempotencyKey = 'deposit_h1'
+            """)).ToList();
+
+        entries.Count.ShouldBe(2);
+        entries.ShouldAllBe(e => e.Sequence != null);
+        entries.Single(e => e.AccountId == Punter).AvailableAfter.ShouldBe(105_000);
+        entries.Single(e => e.AccountId != Punter).AvailableAfter.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_type_filter_keeps_only_its_kinds_and_pages_past_the_first_page()
+    {
+        var (store, _) = await WalletAsync();
+        var transfer = new TransferHandler(new PostingRunner(store), FixedRules.None, _time);
+        var reserve = new ReserveFundsHandler(new PostingRunner(store), FixedRules.None, _time);
+        await transfer.DepositAsync("deposit_t1", Punter, 1_000, "ZAR", "pay_t1");
+        await reserve.HandleAsync("t_reserve", Punter, 500, "ZAR", "t");
+        await transfer.DepositAsync("deposit_t2", Punter, 2_000, "ZAR", "pay_t2");
+        PostingKind[] deposits = [PostingKind.Deposit, PostingKind.TopUp];
+
+        var first = await store.StatementAsync(Punter, null, 2, null, null, CancellationToken.None, deposits);
+        var second = await store.StatementAsync(Punter, first[^1].Sequence, 2, null, null, CancellationToken.None, deposits);
+        var bets = await store.StatementAsync(Punter, null, 10, null, null, CancellationToken.None, [PostingKind.Credit]);
+
+        first.Select(l => l.Amount).ShouldBe([2_000L, 1_000L]);
+        second.Select(l => l.Kind).ShouldBe([PostingKind.TopUp]);
+        second[0].AvailableAfter.ShouldBe(100_000);
+        bets.ShouldBeEmpty();
+    }
+
+    private static string MigratorRollback(string migration)
+    {
+        using var stream = typeof(Program).Assembly.GetManifestResourceStream($"SwiftBets.Wallet.Migrator.Rollbacks.{migration}.sql")!;
+        return new StreamReader(stream).ReadToEnd();
+    }
+
+    private async Task<(SqlWalletStore Store, string ConnectionString)> WalletAsync(string? existing = null)
+    {
+        var connectionString = existing ?? await sql.CreateDatabaseAsync("v2_" + Guid.NewGuid().ToString("N")[..10]);
         var result = typeof(Program).Assembly.EntryPoint!.Invoke(null, [new[] { $"--ConnectionStrings:SbWallet={connectionString}", "--Migrator:SeedDemo=true" }]);
         (result is Task<int> task ? await task : (int)result!).ShouldBe(0);
         return (new SqlWalletStore(new SqlServerConnectionFactory(connectionString), _time), connectionString);

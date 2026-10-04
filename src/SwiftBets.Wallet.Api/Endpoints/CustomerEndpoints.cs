@@ -23,16 +23,23 @@ public static class CustomerEndpoints
                 ? Results.Ok((await accounts.ListAsync(userId, context.RequestAborted)).Select(View))
                 : Unauthenticated(context));
 
-        me.MapGet("/statement", async (string? currency, long? before, int? limit, DateTimeOffset? from, DateTimeOffset? to, ClaimsPrincipal user, HttpContext context, AccountsHandler accounts, IWalletStore store) =>
+        // A statement is always a date range (D196): the last 30 days by default, at most 12 months, filtered by type in the wallet.
+        me.MapGet("/statement", async (string? currency, long? before, int? limit, DateTimeOffset? from, DateTimeOffset? to, string? type, ClaimsPrincipal user, HttpContext context, AccountsHandler accounts, IWalletStore store, TimeProvider time) =>
         {
             if (UserId(user) is not { } userId)
             {
                 return Unauthenticated(context);
             }
 
-            if (RangeProblem(from, to) is { } problem)
+            var window = StatementWindow.Resolve(from, to, time.GetUtcNow());
+            if (window.Problem is { } problem)
             {
                 return Error.Validation("invalid_range", problem).ToHttpResult(context);
+            }
+
+            if (!StatementWindow.TryKinds(type, out var kinds))
+            {
+                return Error.Validation("invalid_type", $"type must be one of {string.Join(", ", StatementWindow.Types.Keys)}.").ToHttpResult(context);
             }
 
             var account = (await accounts.ListAsync(userId, context.RequestAborted)).FirstOrDefault(a => currency is null || a.Currency == currency);
@@ -41,26 +48,41 @@ public static class CustomerEndpoints
                 return Error.NotFound("account_not_found", "You have no account in that currency.").ToHttpResult(context);
             }
 
-            var lines = await store.StatementAsync(account.AccountId, before, Math.Clamp(limit ?? 50, 1, MaxStatementLines), from, to, context.RequestAborted);
+            var size = Math.Clamp(limit ?? 50, 1, MaxStatementLines);
+            var lines = await store.StatementAsync(account.AccountId, before, size, window.From, window.To, context.RequestAborted, kinds);
             return Results.Ok(new
             {
                 account = View(account),
+                from = window.From,
+                to = window.To,
                 lines = lines.Select(l => new { l.Sequence, l.PostingId, kind = Describe(l), l.Amount, l.AvailableAfter, l.BonusAmount, l.BonusAfter, l.Reference, l.PostedAt }),
-                next = lines.Count == 0 ? null : (long?)lines[^1].Sequence,
+                next = lines.Count < size ? null : (long?)lines[^1].Sequence,
             });
         });
 
-        // The whole range as a download, built here so every line comes straight from the ledger.
-        me.MapGet("/statement.csv", async (string? currency, DateTimeOffset? from, DateTimeOffset? to, ClaimsPrincipal user, HttpContext context, AccountsHandler accounts, IWalletStore store) =>
+        // The range as a download, built here so every line comes straight from the ledger. Immediate only up to 90 days and
+        // 10 000 lines; longer exports wait for object storage (D196).
+        me.MapGet("/statement.csv", async (string? currency, DateTimeOffset? from, DateTimeOffset? to, string? type, ClaimsPrincipal user, HttpContext context, AccountsHandler accounts, IWalletStore store, TimeProvider time) =>
         {
             if (UserId(user) is not { } userId)
             {
                 return Unauthenticated(context);
             }
 
-            if (RangeProblem(from, to) is { } problem)
+            var window = StatementWindow.Resolve(from, to, time.GetUtcNow());
+            if (window.Problem is { } problem)
             {
                 return Error.Validation("invalid_range", problem).ToHttpResult(context);
+            }
+
+            if (!StatementWindow.FitsImmediateCsv(window.From, window.To))
+            {
+                return Error.Validation("export_range_too_long", $"Exports over {StatementWindow.MaxCsvDays} days are coming soon. Pick {StatementWindow.MaxCsvDays} days or fewer.").ToHttpResult(context);
+            }
+
+            if (!StatementWindow.TryKinds(type, out var kinds))
+            {
+                return Error.Validation("invalid_type", $"type must be one of {string.Join(", ", StatementWindow.Types.Keys)}.").ToHttpResult(context);
             }
 
             var account = (await accounts.ListAsync(userId, context.RequestAborted)).FirstOrDefault(a => currency is null || a.Currency == currency);
@@ -73,7 +95,7 @@ public static class CustomerEndpoints
             long? before = null;
             while (lines.Count < MaxCsvLines)
             {
-                var page = await store.StatementAsync(account.AccountId, before, 1_000, from, to, context.RequestAborted);
+                var page = await store.StatementAsync(account.AccountId, before, 1_000, window.From, window.To, context.RequestAborted, kinds);
                 lines.AddRange(page);
                 if (page.Count < 1_000)
                 {
@@ -83,7 +105,7 @@ public static class CustomerEndpoints
                 before = page[^1].Sequence;
             }
 
-            var name = $"swiftbets-statement-{account.Currency}-{(from ?? lines.LastOrDefault()?.PostedAt)?.UtcDateTime:yyyy-MM-dd}-to-{(to ?? DateTimeOffset.UtcNow).UtcDateTime:yyyy-MM-dd}.csv";
+            var name = $"swiftbets-statement-{account.Currency}-{window.From.UtcDateTime:yyyy-MM-dd}-to-{window.To.UtcDateTime:yyyy-MM-dd}.csv";
             context.Response.Headers.CacheControl = "no-store";
             return Results.File(System.Text.Encoding.UTF8.GetBytes(StatementCsv.Write(lines.Take(MaxCsvLines), account.Currency, Describe)), "text/csv; charset=utf-8", name);
         });
@@ -181,9 +203,6 @@ public static class CustomerEndpoints
 
     /// <summary>A download holds at most this many lines; a narrower range gets the rest.</summary>
     public const int MaxCsvLines = 10_000;
-
-    private static string? RangeProblem(DateTimeOffset? from, DateTimeOffset? to) =>
-        from is { } f && to is { } t && t <= f ? "to must be after from." : null;
 
     private static Guid? UserId(ClaimsPrincipal user) =>
         Guid.TryParse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;

@@ -59,7 +59,14 @@ internal sealed class SqlWalletTransaction(SqlConnection connection, SqlTransact
             await connection.ExecuteAsync(Sql.Get("Wallet.UpdateReservation"), new { reservation.ReservationId, State = (byte)reservation.State, Now = now }, transaction);
         }
 
-        await connection.ExecuteAsync(Sql.Get("Wallet.InsertEntry"), posting.Entries.Select(e => new { posting.PostingId, e.AccountId, Bucket = (byte)e.Bucket, e.Amount }), transaction);
+        // Each entry carries its account's balances after this posting (D196), taken from the accounts this posting changed.
+        var after = changedAccounts.GroupBy(a => a.AccountId).ToDictionary(g => g.Key, g => g.Last());
+        await connection.ExecuteAsync(Sql.Get("Wallet.InsertEntry"), posting.Entries.Select(e => new
+        {
+            posting.PostingId, e.AccountId, Bucket = (byte)e.Bucket, e.Amount,
+            AvailableAfter = after.TryGetValue(e.AccountId, out var a) ? a.Available : (long?)null,
+            BonusAfter = after.TryGetValue(e.AccountId, out var b) ? b.Bonus : (long?)null,
+        }), transaction);
         await connection.ExecuteAsync(Sql.Get("Wallet.UpdateAccount"), changedAccounts.Select(a => new { a.AccountId, a.Available, a.Reserved, a.Bonus }), transaction);
     }
 

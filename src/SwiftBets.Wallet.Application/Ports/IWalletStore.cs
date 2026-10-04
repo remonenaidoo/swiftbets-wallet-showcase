@@ -22,9 +22,10 @@ public interface IWalletStore
 
     /// <summary>
     /// The account's cash and bonus movements, newest first, before the <paramref name="before"/> sequence and posted from
-    /// <paramref name="from"/> (inclusive) to <paramref name="to"/> (exclusive). The balances after each are over the whole ledger.
+    /// <paramref name="from"/> (inclusive) to <paramref name="to"/> (exclusive), only of <paramref name="kinds"/> when given.
+    /// The balances after each are over the whole ledger, stored on the entries when posted (D196).
     /// </summary>
-    Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken);
+    Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken, IReadOnlyCollection<PostingKind>? kinds = null);
 }
 
 /// <summary>One posting's movement of an account's cash and bonus balances, and both balances after it.</summary>

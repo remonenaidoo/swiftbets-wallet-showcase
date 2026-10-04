@@ -56,10 +56,11 @@ public sealed class SqlWalletStore(ISqlConnectionFactory connections, TimeProvid
         return await GetAccountAsync(accountId, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken, IReadOnlyCollection<PostingKind>? kinds = null)
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
-        return [.. (await connection.QueryAsync<StatementRow>(new CommandDefinition(Sql.Get("Wallet.Statement"), new { AccountId = accountId, Before = before, Limit = limit, From = from, To = to }, cancellationToken: cancellationToken))).Select(r => r.ToLine())];
+        var parameters = new { AccountId = accountId, Before = before, Limit = limit, From = from, To = to, AnyKind = kinds is null, Kinds = (kinds ?? []).Select(k => (int)k).ToArray() };
+        return [.. (await connection.QueryAsync<StatementRow>(new CommandDefinition(Sql.Get("Wallet.Statement"), parameters, cancellationToken: cancellationToken))).Select(r => r.ToLine())];
     }
 
     public async Task<bool> SetBlacklistedAsync(Guid accountId, bool isBlacklisted, CancellationToken cancellationToken)

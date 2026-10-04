@@ -20,9 +20,10 @@ SELECT AccountId, 1, 'ZAR', 100000, AccountId, @now FROM @punters;
 INSERT INTO wallet.Postings (PostingId, Kind, IdempotencyKey, AccountId, Amount, Reference, PostedAt)
 SELECT PostingId, 1, CONCAT('seed_', AccountId), AccountId, 100000, 'demo seed', @now FROM @postings;
 
-INSERT INTO wallet.LedgerEntries (PostingId, AccountId, Bucket, Amount)
-SELECT PostingId, '00000000-0000-0000-0000-00000000f001', 1, -100000 FROM @postings
+-- The punter's entry carries the balance after (D196); the funding account's is not a statement account.
+INSERT INTO wallet.LedgerEntries (PostingId, AccountId, Bucket, Amount, Sequence, PostedAt, AvailableAfter, BonusAfter)
+SELECT d.PostingId, '00000000-0000-0000-0000-00000000f001', 1, -100000, p.Sequence, p.PostedAt, NULL, NULL FROM @postings d JOIN wallet.Postings p ON p.PostingId = d.PostingId
 UNION ALL
-SELECT PostingId, AccountId, 1, 100000 FROM @postings;
+SELECT d.PostingId, d.AccountId, 1, 100000, p.Sequence, p.PostedAt, 100000, 0 FROM @postings d JOIN wallet.Postings p ON p.PostingId = d.PostingId;
 
 COMMIT TRANSACTION;
