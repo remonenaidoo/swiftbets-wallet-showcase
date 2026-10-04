@@ -10,7 +10,8 @@ namespace SwiftBets.Wallet.Api.Grpc;
 
 /// <summary>Internal money API for placement and payout. Every mutation is keyed; expected failures are typed replies, not status codes.</summary>
 [Authorize(Policy = Roles.Service)]
-public sealed class WalletGrpcService(ReserveFundsHandler reserve, SettleReservationHandler settle, TransferHandler transfer, AccountsHandler accounts, IWalletStore store) : WalletBase
+public sealed class WalletGrpcService(
+    ReserveFundsHandler reserve, SettleReservationHandler settle, TransferHandler transfer, AccountsHandler accounts, IWalletStore store, BonusLedgerHandler bonuses, TimeProvider time) : WalletBase
 {
     public override async Task<ReservationReply> Reserve(ReserveRequest request, ServerCallContext context) =>
         WalletReplies.Reservation(await reserve.HandleAsync(Key(request.IdempotencyKey), Id(request.AccountId), Amount(request.Amount), request.Amount.Currency, request.Reference, Terms(request)));
@@ -62,6 +63,25 @@ public sealed class WalletGrpcService(ReserveFundsHandler reserve, SettleReserva
         var reply = new AccountsReply();
         reply.Accounts.AddRange((await accounts.ListAsync(Id(request.UserId), context.CancellationToken)).Select(WalletReplies.Balance));
         return reply;
+    }
+
+    /// <summary>Bonus money for a reward (payments' refer-a-friend, D199): from the promotions account, with its wagering terms.</summary>
+    public override async Task<PostingReply> GrantBonus(GrantBonusRequest request, ServerCallContext context) =>
+        WalletReplies.Posting(await bonuses.GrantAsync(Key(request.IdempotencyKey), Id(request.AccountId), request.Amount.Currency, BonusTerms(request, time.GetUtcNow()), request.Reference));
+
+    /// <summary>The grant's terms; out-of-range terms are a caller bug, so InvalidArgument rather than a typed refusal.</summary>
+    public static BonusGrantTerms BonusTerms(GrantBonusRequest request, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var amount = Amount(request.Amount);
+        if (request.WageringMultiplier is < 0 or > 50 || request.MinOddsHundredths is < 101 or > 100_000 || request.SportsPercent is < 0 or > 100
+            || request.CasinoPercent is < 0 or > 100 || request.ValidDays is < 1 or > 90)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "bonus terms are out of range."));
+        }
+
+        return new BonusGrantTerms(amount, request.WageringMultiplier, request.MinOddsHundredths, (byte)request.SportsPercent, (byte)request.CasinoPercent,
+            now.AddDays(request.ValidDays), null);
     }
 
     /// <summary>A stake's product, lowest price and free bet; a caller that sends none gets a plain sports stake (cash only).</summary>
