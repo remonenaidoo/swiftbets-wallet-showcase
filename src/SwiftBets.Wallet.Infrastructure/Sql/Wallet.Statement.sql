@@ -7,5 +7,7 @@ WITH moves AS (
     WHERE e.AccountId = @AccountId AND e.Bucket = 1)
 SELECT TOP (@Limit) Sequence, PostingId, Kind, Amount, AvailableAfter, Reference, PostedAt
 FROM moves
-WHERE @Before IS NULL OR Sequence < @Before
+WHERE (@Before IS NULL OR Sequence < @Before)
+  AND (@From IS NULL OR PostedAt >= @From)
+  AND (@To IS NULL OR PostedAt < @To)
 ORDER BY Sequence DESC;
