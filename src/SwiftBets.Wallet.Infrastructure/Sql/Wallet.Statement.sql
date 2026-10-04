@@ -7,6 +7,9 @@ IF @From IS NOT NULL OR @To IS NOT NULL
     SELECT @FromSeq = ISNULL(MIN(Sequence), 0), @ToSeq = ISNULL(MAX(Sequence), -1)
     FROM wallet.LedgerEntries
     WHERE AccountId = @AccountId AND (@From IS NULL OR PostedAt >= @From) AND (@To IS NULL OR PostedAt < @To);
+-- The page cursor narrows the same range, so the seek has one plain Sequence range (no OR for the optimiser to scan on).
+IF @Before IS NOT NULL AND @Before - 1 < @ToSeq
+    SET @ToSeq = @Before - 1;
 
 SELECT TOP (@Limit) p.Sequence, p.PostingId, p.Kind, x.Amount, ISNULL(x.AvailableAfter, 0) AS AvailableAfter, p.Reference, p.PostedAt,
        x.BonusAmount, ISNULL(x.BonusAfter, 0) AS BonusAfter
@@ -21,11 +24,11 @@ FROM (
     FROM wallet.LedgerEntries e
     WHERE e.AccountId = @AccountId
       AND e.Sequence BETWEEN @FromSeq AND @ToSeq
-      AND (@Before IS NULL OR e.Sequence < @Before)
     GROUP BY e.Sequence, e.PostingId) x
 JOIN wallet.Postings p ON p.PostingId = x.PostingId
 WHERE (x.Moved = 1 OR (x.Held = 1 AND p.Kind = 2))
   AND (@AnyKind = 1 OR p.Kind IN @Kinds)
   AND (@From IS NULL OR p.PostedAt >= @From)
   AND (@To IS NULL OR p.PostedAt < @To)
-ORDER BY p.Sequence DESC;
+ORDER BY p.Sequence DESC
+OPTION (RECOMPILE); -- plans for this page's actual range, not the first caller's
