@@ -6,6 +6,8 @@ using SwiftBets.BuildingBlocks.Outbox;
 using SwiftBets.BuildingBlocks.Persistence;
 using SwiftBets.Contracts.Compliance;
 using SwiftBets.Contracts.Messaging;
+using SwiftBets.Contracts.Payments;
+using SwiftBets.Contracts.Settlement;
 using SwiftBets.Wallet.Application.Ports;
 using SwiftBets.Wallet.Infrastructure.Persistence;
 using SwiftBets.Wallet.Infrastructure.ResponsibleGambling;
@@ -26,6 +28,16 @@ public static class InfrastructureRegistration
         services.AddSingleton<IReconciliationStore, SqlReconciliationStore>();
         services.AddCompactedState<RestrictionsChangedV1>(Topics.RestrictionsChanged);
         services.AddSingleton<IGamblingRules, CompactedGamblingRules>();
+        services.AddSingleton<IBonusStore, SqlBonusStore>();
+        services.AddSingleton<IPromotionStore, SqlPromotionStore>();
+        services.AddValidatedOptions<BonusOptions>(configuration, BonusOptions.SectionName);
+        if (configuration.GetValue($"{BonusOptions.SectionName}:{nameof(BonusOptions.Enabled)}", true))
+        {
+            services.AddHostedService<BonusExpiryWorker>();
+            services.AddKafkaConsumer<DepositSucceededV1, Messaging.DepositAwardConsumer>(Topics.DepositSucceeded, "wallet.promotions-deposit", startAtLatest: true);
+            services.AddKafkaConsumer<CouponSettledV2, Messaging.FirstBetAwardConsumer>(Topics.CouponSettledV2, "wallet.promotions-first-bet", startAtLatest: true);
+        }
+
         services.AddValidatedOptions<ReconciliationOptions>(configuration, ReconciliationOptions.SectionName);
         if (configuration.GetValue($"{ReconciliationOptions.SectionName}:{nameof(ReconciliationOptions.Enabled)}", true))
         {

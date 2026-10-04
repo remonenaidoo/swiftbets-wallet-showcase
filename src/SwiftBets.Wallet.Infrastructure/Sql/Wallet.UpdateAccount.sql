@@ -1,1 +1,1 @@
-UPDATE wallet.Accounts SET Available = @Available, Reserved = @Reserved WHERE AccountId = @AccountId;
+UPDATE wallet.Accounts SET Available = @Available, Reserved = @Reserved, Bonus = @Bonus WHERE AccountId = @AccountId;

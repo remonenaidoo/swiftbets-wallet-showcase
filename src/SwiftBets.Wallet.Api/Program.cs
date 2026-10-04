@@ -15,6 +15,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddSwiftBetsObservability("swiftbets-wallet");
 builder.Services.AddSwiftBetsWeb();
 builder.Services.AddSwiftBetsJwtBearer(builder.Configuration);
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(PromotionEndpoints.Read, p => p.RequireClaim("perm", PromotionEndpoints.Read))
+    .AddPolicy(PromotionEndpoints.Write, p => p.RequireClaim("perm", PromotionEndpoints.Write));
 builder.Services.AddGrpc(options =>
 {
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
@@ -34,6 +37,7 @@ app.MapGrpcService<WalletGrpcService>();
 app.MapTopUp();
 app.MapCustomerWallet();
 app.MapReconciliation();
+app.MapPromotionAdmin();
 app.MapSwiftBetsFaultEndpoints();
 
 await app.RunAsync();

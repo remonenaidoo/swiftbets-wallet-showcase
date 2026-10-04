@@ -1,4 +1,5 @@
 using SwiftBets.Wallet.Domain;
+using SwiftBets.Wallet.Domain.Bonus;
 using SwiftBets.Wallet.Domain.ResponsibleGambling;
 
 namespace SwiftBets.Wallet.Application.Ports;
@@ -25,6 +26,25 @@ public interface IWalletTransaction : IAsyncDisposable
     Task AddSpendAsync(Guid accountId, DateTimeOffset at, long staked, long won, long deposited);
 
     Task<DateTimeOffset> ReservedAtAsync(Guid reservationId);
+
+    /// <summary>The account's active bonus grant; call it with the account locked, which also guards the grant.</summary>
+    Task<BonusGrant?> ActiveGrantAsync(Guid accountId);
+
+    Task<BonusGrant?> GetGrantAsync(Guid grantId);
+
+    Task SaveGrantAsync(BonusGrant grant, bool isNew);
+
+    Task<FreeBet?> LockFreeBetAsync(Guid freeBetId);
+
+    Task SaveFreeBetAsync(FreeBet freeBet, bool isNew);
+
+    /// <summary>The sports stake a coupon reference was placed with, when an offer was involved.</summary>
+    Task<BonusStake?> FindStakeAsync(Guid accountId, string reference);
+
+    Task<BonusStake?> LatestCasinoStakeAsync(Guid accountId);
+
+    /// <summary>Inserts the stake, or (not new) records how much of its free bet has been kept back.</summary>
+    Task SaveStakeAsync(BonusStake stake, bool isNew);
 
     Task CommitAsync();
 }

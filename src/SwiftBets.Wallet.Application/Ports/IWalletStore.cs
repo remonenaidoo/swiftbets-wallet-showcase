@@ -21,11 +21,11 @@ public interface IWalletStore
     Task<Account?> OpenAccountAsync(Guid accountId, Guid userId, string currency, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The account's available-balance movements, newest first, before the <paramref name="before"/> sequence and posted from
-    /// <paramref name="from"/> (inclusive) to <paramref name="to"/> (exclusive). The balance after each is over the whole ledger.
+    /// The account's cash and bonus movements, newest first, before the <paramref name="before"/> sequence and posted from
+    /// <paramref name="from"/> (inclusive) to <paramref name="to"/> (exclusive). The balances after each are over the whole ledger.
     /// </summary>
     Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken);
 }
 
-/// <summary>One movement of an account's available balance and the balance after it.</summary>
-public sealed record StatementLine(long Sequence, Guid PostingId, PostingKind Kind, long Amount, long AvailableAfter, string Reference, DateTimeOffset PostedAt);
+/// <summary>One posting's movement of an account's cash and bonus balances, and both balances after it.</summary>
+public sealed record StatementLine(long Sequence, Guid PostingId, PostingKind Kind, long Amount, long AvailableAfter, string Reference, DateTimeOffset PostedAt, long BonusAmount = 0, long BonusAfter = 0);

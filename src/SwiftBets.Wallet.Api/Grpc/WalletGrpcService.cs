@@ -13,7 +13,7 @@ namespace SwiftBets.Wallet.Api.Grpc;
 public sealed class WalletGrpcService(ReserveFundsHandler reserve, SettleReservationHandler settle, TransferHandler transfer, AccountsHandler accounts, IWalletStore store) : WalletBase
 {
     public override async Task<ReservationReply> Reserve(ReserveRequest request, ServerCallContext context) =>
-        WalletReplies.Reservation(await reserve.HandleAsync(Key(request.IdempotencyKey), Id(request.AccountId), Amount(request.Amount), request.Amount.Currency, request.Reference));
+        WalletReplies.Reservation(await reserve.HandleAsync(Key(request.IdempotencyKey), Id(request.AccountId), Amount(request.Amount), request.Amount.Currency, request.Reference, Terms(request)));
 
     public override async Task<ReservationReply> Capture(ReservationCommand request, ServerCallContext context) =>
         WalletReplies.Reservation(await settle.CaptureAsync(Key(request.IdempotencyKey), Id(request.ReservationId), context.CancellationToken));
@@ -25,7 +25,7 @@ public sealed class WalletGrpcService(ReserveFundsHandler reserve, SettleReserva
         WalletReplies.Posting(await transfer.CreditAsync(Key(request.IdempotencyKey), Id(request.AccountId), Amount(request.Amount), request.Amount.Currency, request.Reference));
 
     public override async Task<PostingReply> Debit(PostingRequest request, ServerCallContext context) =>
-        WalletReplies.Posting(await transfer.DebitAsync(Key(request.IdempotencyKey), Id(request.AccountId), Amount(request.Amount), request.Amount.Currency, request.Reference));
+        WalletReplies.Posting(await transfer.DebitAsync(Key(request.IdempotencyKey), Id(request.AccountId), Amount(request.Amount), request.Amount.Currency, request.Reference, request.Reason));
 
     public override async Task<BalanceReply> GetBalance(GetBalanceRequest request, ServerCallContext context) =>
         await store.GetAccountAsync(Id(request.AccountId), context.CancellationToken) is { } account
@@ -65,6 +65,12 @@ public sealed class WalletGrpcService(ReserveFundsHandler reserve, SettleReserva
         reply.Accounts.AddRange((await accounts.ListAsync(Id(request.UserId), context.CancellationToken)).Select(WalletReplies.Balance));
         return reply;
     }
+
+    /// <summary>A stake's product, lowest price and free bet; a caller that sends none gets a plain sports stake (cash only).</summary>
+    private static StakeTerms Terms(ReserveRequest request) => new(
+        request.Product == "casino" ? Domain.Bonus.StakeProduct.Casino : Domain.Bonus.StakeProduct.Sport,
+        Math.Max(0, request.OddsHundredths),
+        request.FreeBetId is { Length: > 0 } freeBet ? Id(freeBet) : null);
 
     private static string Currency(string currency) =>
         currency is { Length: 3 } ? currency : throw new RpcException(new Status(StatusCode.InvalidArgument, "currency must be an ISO 4217 code."));

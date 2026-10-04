@@ -64,6 +64,7 @@ public sealed class MigratorTests(SqlServerFixture sql)
         (await RunAsync(args)).ShouldBe(0);
         await using var connection = new SqlConnection(connectionString);
         await connection.ExecuteAsync("INSERT INTO wallet.Accounts (AccountId, Kind, Currency, UserId, CreatedAt) VALUES (NEWID(), 1, 'USD', '10000000-0000-0000-0000-000000000001', SYSUTCDATETIME())");
+        await connection.ExecuteAsync(Rollback("0009_bonus_wagering_and_promotions"));
         await connection.ExecuteAsync(Rollback("0008_bonus_and_withdrawals"));
 
         await Should.ThrowAsync<SqlException>(() => connection.ExecuteAsync(Rollback("0007_currency_accounts")));
@@ -88,10 +89,29 @@ public sealed class MigratorTests(SqlServerFixture sql)
         (await PuntersAsync(connection)).ShouldBe(1);
 
         // Rollbacks run newest first, so the later schema changes come off before the seed is restored.
+        await connection.ExecuteAsync(Rollback("0009_bonus_wagering_and_promotions"));
         await connection.ExecuteAsync(Rollback("0008_bonus_and_withdrawals"));
         await connection.ExecuteAsync(Rollback("0007_currency_accounts"));
         await connection.ExecuteAsync(Rollback("0005_demo_seed_removed"));
         (await PuntersAsync(connection)).ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task Promotions_roll_back_only_until_promotions_money_has_moved()
+    {
+        var connectionString = await sql.CreateDatabaseAsync("mig_" + Guid.NewGuid().ToString("N")[..10]);
+        (await RunAsync([$"--ConnectionStrings:SbWallet={connectionString}"])).ShouldBe(0);
+        await using var connection = new SqlConnection(connectionString);
+        await connection.ExecuteAsync("""
+            INSERT INTO wallet.Postings (PostingId, Kind, IdempotencyKey, AccountId, Amount, Reference, PostedAt) VALUES ('00000000-0000-0000-0000-0000000000aa', 11, 'k', '00000000-0000-0000-0000-00000000c001', 1, 'r', SYSUTCDATETIME());
+            INSERT INTO wallet.LedgerEntries (PostingId, AccountId, Bucket, Amount) VALUES ('00000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-00000000c001', 1, -1);
+            """);
+
+        await Should.ThrowAsync<SqlException>(() => connection.ExecuteAsync(Rollback("0009_bonus_wagering_and_promotions")));
+
+        await connection.ExecuteAsync("DELETE FROM wallet.LedgerEntries; DELETE FROM wallet.Postings;");
+        await connection.ExecuteAsync(Rollback("0009_bonus_wagering_and_promotions"));
+        (await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM wallet.Accounts WHERE Kind = 4")).ShouldBe(0);
     }
 
     [Fact]

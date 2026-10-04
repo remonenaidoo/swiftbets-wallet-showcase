@@ -33,6 +33,8 @@ internal static class WalletReplies
         AccountId = reservation.AccountId.ToString(),
         Amount = new Money { MinorUnits = reservation.Amount, Currency = reservation.Currency },
         Reference = reservation.Reference,
+        BonusAmount = new Money { MinorUnits = reservation.BonusAmount, Currency = reservation.Currency },
+        FreeBetId = reservation.FreeBetId?.ToString() ?? string.Empty,
         State = reservation.State switch
         {
             Domain.ReservationState.Held => SwiftBets.Contracts.Grpc.Wallet.V1.ReservationState.Held,

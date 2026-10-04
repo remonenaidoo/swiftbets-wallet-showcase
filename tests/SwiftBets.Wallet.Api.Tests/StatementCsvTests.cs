@@ -9,11 +9,11 @@ public sealed class StatementCsvTests
     [Fact]
     public void Lines_are_written_in_rands_with_iso_dates()
     {
-        var line = new StatementLine(7, Guid.NewGuid(), PostingKind.Deposit, 12_345, -50, "pay_1", new DateTimeOffset(2026, 10, 1, 12, 30, 0, TimeSpan.FromHours(2)));
+        var line = new StatementLine(7, Guid.NewGuid(), PostingKind.Deposit, 12_345, -50, "pay_1", new DateTimeOffset(2026, 10, 1, 12, 30, 0, TimeSpan.FromHours(2)), 500, 1_500);
 
         var csv = StatementCsv.Write([line], "ZAR", _ => "deposit");
 
-        csv.ShouldBe(StatementCsv.Header + "\r\n2026-10-01T10:30:00Z,deposit,pay_1,123.45,-0.50,ZAR\r\n");
+        csv.ShouldBe(StatementCsv.Header + "\r\n2026-10-01T10:30:00Z,deposit,pay_1,123.45,-0.50,5.00,15.00,ZAR\r\n");
     }
 
     [Fact]

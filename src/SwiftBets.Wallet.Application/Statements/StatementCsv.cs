@@ -4,10 +4,10 @@ using SwiftBets.Wallet.Application.Ports;
 
 namespace SwiftBets.Wallet.Application.Statements;
 
-/// <summary>A customer's statement as CSV: ISO 8601 UTC dates, amounts in major units (rands), text cells safe to open in a spreadsheet.</summary>
+/// <summary>A customer's statement as CSV (cash and bonus movements and balances): ISO 8601 UTC dates, amounts in major units (rands), text cells safe to open in a spreadsheet.</summary>
 public static class StatementCsv
 {
-    public const string Header = "date,type,reference,amount,balance,currency";
+    public const string Header = "date,type,reference,amount,balance,bonusAmount,bonusBalance,currency";
 
     public static string Write(IEnumerable<StatementLine> lines, string currency, Func<StatementLine, string> describe)
     {
@@ -21,6 +21,8 @@ public static class StatementCsv
                 .Append(Text(line.Reference)).Append(',')
                 .Append(Major(line.Amount)).Append(',')
                 .Append(Major(line.AvailableAfter)).Append(',')
+                .Append(Major(line.BonusAmount)).Append(',')
+                .Append(Major(line.BonusAfter)).Append(',')
                 .Append(Text(currency)).Append("\r\n");
         }
 

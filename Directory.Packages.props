@@ -18,12 +18,12 @@
     <PackageVersion Include="SwiftBets.BuildingBlocks.Redis" Version="0.6.1" />
     <PackageVersion Include="SwiftBets.BuildingBlocks.Testing" Version="0.6.1" />
     <PackageVersion Include="SwiftBets.BuildingBlocks.Web" Version="0.6.1" />
-    <PackageVersion Include="SwiftBets.Contracts" Version="2.3.0" />
+    <PackageVersion Include="SwiftBets.Contracts" Version="2.8.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
     <PackageVersion Include="Grpc.AspNetCore" Version="2.84.0" />
     <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.84.0" />
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
-    <PackageVersion Include="SwiftBets.Contracts.Grpc" Version="2.3.0" />
+    <PackageVersion Include="SwiftBets.Contracts.Grpc" Version="2.8.0" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.12" />

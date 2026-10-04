@@ -12,4 +12,7 @@ public enum PostingKind : byte
     WithdrawalHold = 8,
     WithdrawalPaid = 9,
     WithdrawalReturned = 10,
+    BonusGranted = 11,
+    BonusConverted = 12,
+    BonusForfeited = 13,
 }
