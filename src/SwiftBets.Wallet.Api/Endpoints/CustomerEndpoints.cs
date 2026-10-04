@@ -209,6 +209,9 @@ public static class CustomerEndpoints
         PostingKind.Deposit => "deposit",
         PostingKind.WithdrawalHold => "withdrawal",
         PostingKind.WithdrawalReturned => "withdrawalReturned",
+        PostingKind.VoucherPurchase => "voucherBought",
+        PostingKind.VoucherRedeem => "voucherRedeemed",
+        PostingKind.VoucherVoid => "voucherRefunded",
         _ => kind.ToString(),
     };
 }

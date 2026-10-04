@@ -5,6 +5,7 @@ using SwiftBets.Wallet.Application.Ports;
 using SwiftBets.Wallet.Domain;
 using SwiftBets.Wallet.Domain.Bonus;
 using SwiftBets.Wallet.Domain.ResponsibleGambling;
+using SwiftBets.Wallet.Domain.Vouchers;
 
 namespace SwiftBets.Wallet.Infrastructure.Persistence;
 
@@ -80,6 +81,18 @@ internal sealed class SqlWalletTransaction(SqlConnection connection, SqlTransact
 
     public Task<DateTimeOffset> ReservedAtAsync(Guid reservationId) =>
         connection.QuerySingleAsync<DateTimeOffset>(Sql.Get("Wallet.ReservedAt"), new { ReservationId = reservationId }, transaction);
+
+    public Task InsertVoucherAsync(Voucher voucher, byte[] codeHash)
+    {
+        var parameters = new DynamicParameters(VoucherRow.Parameters(voucher));
+        parameters.Add("CodeHash", codeHash, System.Data.DbType.Binary, size: 32);
+        return connection.ExecuteAsync(Sql.Get("Voucher.Insert"), parameters, transaction);
+    }
+
+    public async Task<Voucher?> LockVoucherAsync(Guid voucherId) =>
+        (await connection.QuerySingleOrDefaultAsync<VoucherRow>(Sql.Get("Voucher.Lock"), new { VoucherId = voucherId }, transaction))?.ToDomain();
+
+    public Task UpdateVoucherAsync(Voucher voucher) => connection.ExecuteAsync(Sql.Get("Voucher.Update"), VoucherRow.Parameters(voucher), transaction);
 
     public async Task<BonusGrant?> ActiveGrantAsync(Guid accountId) =>
         (await connection.QuerySingleOrDefaultAsync<GrantRow>(Sql.Get("Bonus.ActiveGrant"), new { AccountId = accountId }, transaction))?.ToDomain();

@@ -25,6 +25,9 @@ public sealed class SqlReconciliationStore(ISqlConnectionFactory connections) : 
     public Task<IReadOnlyList<LedgerDrift>> FindUnbalancedPostingsAsync(CancellationToken cancellationToken) =>
         DriftsAsync("Reconcile.UnbalancedPostings", cancellationToken);
 
+    public Task<IReadOnlyList<LedgerDrift>> FindVoucherDriftAsync(CancellationToken cancellationToken) =>
+        DriftsAsync("Reconcile.VoucherDrift", cancellationToken);
+
     public Task<long> SumAllEntriesAsync(CancellationToken cancellationToken) =>
         ScalarAsync<long>("Reconcile.SumAllEntries", cancellationToken);
 

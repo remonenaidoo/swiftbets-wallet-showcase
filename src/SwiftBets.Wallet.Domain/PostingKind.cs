@@ -15,4 +15,8 @@ public enum PostingKind : byte
     BonusGranted = 11,
     BonusConverted = 12,
     BonusForfeited = 13,
+    VoucherPurchase = 14,
+    VoucherIssue = 15,
+    VoucherRedeem = 16,
+    VoucherVoid = 17,
 }

@@ -64,6 +64,7 @@ public sealed class MigratorTests(SqlServerFixture sql)
         (await RunAsync(args)).ShouldBe(0);
         await using var connection = new SqlConnection(connectionString);
         await connection.ExecuteAsync("INSERT INTO wallet.Accounts (AccountId, Kind, Currency, UserId, CreatedAt) VALUES (NEWID(), 1, 'USD', '10000000-0000-0000-0000-000000000001', SYSUTCDATETIME())");
+        await connection.ExecuteAsync(Rollback("0010_vouchers"));
         await connection.ExecuteAsync(Rollback("0009_bonus_wagering_and_promotions"));
         await connection.ExecuteAsync(Rollback("0008_bonus_and_withdrawals"));
 

@@ -9,6 +9,7 @@ using SwiftBets.Contracts.Messaging;
 using SwiftBets.Contracts.Payments;
 using SwiftBets.Contracts.Settlement;
 using SwiftBets.Wallet.Application.Ports;
+using SwiftBets.Wallet.Application.Vouchers;
 using SwiftBets.Wallet.Infrastructure.Persistence;
 using SwiftBets.Wallet.Infrastructure.ResponsibleGambling;
 using SwiftBets.Wallet.Infrastructure.Workers;
@@ -26,6 +27,9 @@ public static class InfrastructureRegistration
         services.AddSingleton<IWalletStore, SqlWalletStore>();
         services.AddSingleton<ILimitReachedNotifier, Messaging.KafkaLimitReachedNotifier>();
         services.AddSingleton<IReconciliationStore, SqlReconciliationStore>();
+        services.AddSingleton<IVoucherStore, SqlVoucherStore>();
+        services.AddSingleton<IVoucherGiftNotifier, Messaging.KafkaVoucherGiftNotifier>();
+        services.AddSingleton(new VoucherSettings(Required(configuration, "Wallet:Vouchers:CodeSecret")));
         services.AddCompactedState<RestrictionsChangedV1>(Topics.RestrictionsChanged);
         services.AddSingleton<IGamblingRules, CompactedGamblingRules>();
         services.AddSingleton<IBonusStore, SqlBonusStore>();

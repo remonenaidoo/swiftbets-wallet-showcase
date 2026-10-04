@@ -20,4 +20,7 @@ public enum DriftKind : byte
 
     /// <summary>A punter's bonus balance differs from the sum of its bonus-bucket entries.</summary>
     BonusBalance = 6,
+
+    /// <summary>A voucher liability account's entries differ from the total of the vouchers still open in its currency.</summary>
+    VoucherLiability = 7,
 }

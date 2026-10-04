@@ -1,9 +1,10 @@
--- One UTC day of money movement, split the way the reporting warehouse counts it. Casino postings carry casino: keys, racing postings racing: keys, lotto postings lotto: keys.
+-- One UTC day of money movement, split the way the reporting warehouse counts it. Casino postings carry casino: keys, racing postings racing: keys, lotto postings lotto: keys;
+-- promotional credits (promo: keys, such as referral rewards) are marketing cost, not sports payouts.
 -- Offer money is read from the promotions accounts' entries: granted out as bonus, staked out as free bets, and returned
 -- by forfeits, expiries and kept free bet stakes; conversions are the cash bonus became.
 SELECT
     COALESCE(SUM(CASE WHEN Kind = 3 AND IdempotencyKey NOT LIKE 'casino:%' AND IdempotencyKey NOT LIKE 'racing:%' AND IdempotencyKey NOT LIKE 'lotto:%' THEN Amount END), 0) AS SportsStakes,
-    COALESCE(SUM(CASE WHEN Kind = 5 AND IdempotencyKey NOT LIKE 'casino:%' AND IdempotencyKey NOT LIKE 'racing:%' AND IdempotencyKey NOT LIKE 'lotto:%' THEN Amount END), 0) AS SportsCredits,
+    COALESCE(SUM(CASE WHEN Kind = 5 AND IdempotencyKey NOT LIKE 'casino:%' AND IdempotencyKey NOT LIKE 'racing:%' AND IdempotencyKey NOT LIKE 'lotto:%' AND IdempotencyKey NOT LIKE 'promo:%' THEN Amount END), 0) AS SportsCredits,
     COALESCE(SUM(CASE WHEN Kind = 6 AND IdempotencyKey NOT LIKE 'casino:%' AND IdempotencyKey NOT LIKE 'racing:%' AND IdempotencyKey NOT LIKE 'lotto:%' THEN Amount END), 0) AS SportsDebits,
     COALESCE(SUM(CASE WHEN IdempotencyKey LIKE 'casino:%' AND Kind IN (3, 6) THEN Amount END), 0) AS CasinoStaked,
     COALESCE(SUM(CASE WHEN IdempotencyKey LIKE 'casino:%' AND Kind IN (4, 5) THEN Amount END), 0) AS CasinoReturned,

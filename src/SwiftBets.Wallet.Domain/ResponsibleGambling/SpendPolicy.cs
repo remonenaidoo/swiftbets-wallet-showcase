@@ -28,6 +28,10 @@ public static class SpendPolicy
     public static SpendRefusal? CheckWithdrawal(GamblingRules rules, DateTimeOffset now) =>
         Blocked(rules, now, BlockKind.NoWithdrawals);
 
+    /// <summary>A voucher is betting money for someone, so exclusion and betting or withdrawal blocks all stop buying one.</summary>
+    public static SpendRefusal? CheckVoucherPurchase(GamblingRules rules, DateTimeOffset now) =>
+        Blocked(rules, now, BlockKind.Exclusion, BlockKind.NoBetting, BlockKind.NoWithdrawals);
+
     private static SpendRefusal? Blocked(GamblingRules rules, DateTimeOffset now, params BlockKind[] kinds) =>
         rules.Blocks.FirstOrDefault(b => kinds.Contains(b.Kind) && b.IsActive(now)) is { } block
             ? new SpendRefusal(WalletFailure.AccountRestricted, block.Kind == BlockKind.Exclusion ? "account excluded" : $"account blocked: {block.Kind}")

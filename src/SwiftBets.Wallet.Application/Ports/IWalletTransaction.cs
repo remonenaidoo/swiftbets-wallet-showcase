@@ -1,6 +1,7 @@
 using SwiftBets.Wallet.Domain;
 using SwiftBets.Wallet.Domain.Bonus;
 using SwiftBets.Wallet.Domain.ResponsibleGambling;
+using SwiftBets.Wallet.Domain.Vouchers;
 
 namespace SwiftBets.Wallet.Application.Ports;
 
@@ -26,6 +27,14 @@ public interface IWalletTransaction : IAsyncDisposable
     Task AddSpendAsync(Guid accountId, DateTimeOffset at, long staked, long won, long deposited);
 
     Task<DateTimeOffset> ReservedAtAsync(Guid reservationId);
+
+    /// <summary>Stores a new voucher under its code's hash, in the same transaction as the posting that funds it.</summary>
+    Task InsertVoucherAsync(Voucher voucher, byte[] codeHash);
+
+    /// <summary>Reads a voucher with an update lock held to the end of the transaction, so a redeem and a void cannot both win.</summary>
+    Task<Voucher?> LockVoucherAsync(Guid voucherId);
+
+    Task UpdateVoucherAsync(Voucher voucher);
 
     /// <summary>The account's active bonus grant; call it with the account locked, which also guards the grant.</summary>
     Task<BonusGrant?> ActiveGrantAsync(Guid accountId);

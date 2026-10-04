@@ -49,6 +49,17 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
     }
 
     [Fact]
+    public async Task Issuing_vouchers_needs_the_payments_approve_permission()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/admin/wallet/vouchers/batches") { Content = JsonContent.Create(new { count = 1, amount = 1_000, note = "x" }) };
+        request.Headers.Authorization = new("Bearer", TestJwt.Issue("operator-1", "Operator"));
+
+        using var response = await _client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Metrics_are_exposed()
     {
         var body = await _client.GetStringAsync(new Uri("/metrics", UriKind.Relative), TestContext.Current.CancellationToken);
@@ -62,6 +73,7 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
         {
         builder.UseSetting("ConnectionStrings:SbWallet", "Server=127.0.0.1,1;Database=x;User Id=x;Password=x;TrustServerCertificate=True;Connect Timeout=1");
         builder.UseSetting("Kafka:BootstrapServers", "127.0.0.1:1");
+            builder.UseSetting("Wallet:Vouchers:CodeSecret", "test-secret");
             builder.UseSetting("Jwt:Authority", TestJwt.Issuer);
             builder.ConfigureServices(services => services.UseTestJwt());
         }

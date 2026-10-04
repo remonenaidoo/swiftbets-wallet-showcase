@@ -15,10 +15,10 @@ public static class WellKnownAccounts
         ["USD"] = Guid.Parse("00000000-0000-0000-0000-00000000c840"),
     };
 
-    private static readonly Dictionary<string, (Guid House, Guid Funding)> ByCurrency = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, (Guid House, Guid Funding, Guid Vouchers)> ByCurrency = new(StringComparer.Ordinal)
     {
-        ["ZAR"] = (House, Funding),
-        ["USD"] = (Guid.Parse("00000000-0000-0000-0000-00000000b840"), Guid.Parse("00000000-0000-0000-0000-00000000f840")),
+        ["ZAR"] = (House, Funding, Guid.Parse("00000000-0000-0000-0000-00000000d001")),
+        ["USD"] = (Guid.Parse("00000000-0000-0000-0000-00000000b840"), Guid.Parse("00000000-0000-0000-0000-00000000f840"), Guid.Parse("00000000-0000-0000-0000-00000000d840")),
     };
 
     public static IReadOnlyCollection<string> Currencies => ByCurrency.Keys;
@@ -26,6 +26,9 @@ public static class WellKnownAccounts
     public static Guid? HouseFor(string currency) => ByCurrency.TryGetValue(currency, out var pair) ? pair.House : null;
 
     public static Guid? FundingFor(string currency) => ByCurrency.TryGetValue(currency, out var pair) ? pair.Funding : null;
+
+    /// <summary>What open vouchers are worth: bought or issued vouchers move money here, redeeming or voiding moves it out.</summary>
+    public static Guid? VouchersFor(string currency) => ByCurrency.TryGetValue(currency, out var pair) ? pair.Vouchers : null;
 
     /// <summary>The offers budget: bonus grants and free bet stakes come from it; forfeits and kept free bet stakes go back.</summary>
     public static Guid? PromotionsFor(string currency) => PromotionsByCurrency.TryGetValue(currency, out var id) ? id : null;

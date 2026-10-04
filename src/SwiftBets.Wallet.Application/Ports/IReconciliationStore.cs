@@ -16,6 +16,9 @@ public interface IReconciliationStore
 
     Task<IReadOnlyList<LedgerDrift>> FindUnbalancedPostingsAsync(CancellationToken cancellationToken);
 
+    /// <summary>Voucher liability accounts whose entries differ from the vouchers still open.</summary>
+    Task<IReadOnlyList<LedgerDrift>> FindVoucherDriftAsync(CancellationToken cancellationToken);
+
     Task<long> SumAllEntriesAsync(CancellationToken cancellationToken);
 
     /// <summary>One UTC day of postings in minor units, for the reporting warehouse to reconcile against.</summary>

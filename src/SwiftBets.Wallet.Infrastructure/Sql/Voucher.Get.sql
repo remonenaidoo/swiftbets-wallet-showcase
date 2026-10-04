@@ -1,0 +1,1 @@
+SELECT VoucherId, IssueKey, Last4, Amount, Currency, Source, SourceAccountId, PurchasedBy, BatchId, RecipientEmail, Status, CreatedAt, ExpiresAt, RedeemedBy, RedeemedAt, VoidedBy, VoidReason, VoidedAt FROM wallet.Vouchers WHERE VoucherId = @VoucherId;
