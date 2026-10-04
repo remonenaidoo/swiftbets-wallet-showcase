@@ -29,7 +29,7 @@ public interface IReconciliationStore
 /// <summary>
 /// Sports stakes captured, sports credits and debits (payouts and clawbacks), and casino and racing money staked and returned.
 /// The offer figures come from the promotions accounts: bonus granted, free bets staked, money returned to them (forfeits,
-/// expiries, kept free bet stakes), and bonus converted to cash (D166).
+/// expiries, kept free bet stakes), and bonus converted to cash (D166). Lotto staked and returned (net of override clawbacks) come last.
 /// </summary>
 public sealed record LedgerDayTotals(long SportsStakes, long SportsCredits, long SportsDebits, long CasinoStaked, long CasinoReturned, long RacingStaked, long RacingReturned,
-    long BonusGranted = 0, long FreeBetsStaked = 0, long BonusReturned = 0, long BonusConverted = 0);
+    long BonusGranted = 0, long FreeBetsStaked = 0, long BonusReturned = 0, long BonusConverted = 0, long LottoStaked = 0, long LottoReturned = 0);

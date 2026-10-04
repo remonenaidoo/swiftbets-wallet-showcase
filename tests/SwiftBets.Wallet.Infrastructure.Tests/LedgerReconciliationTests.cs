@@ -100,6 +100,29 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task Day_totals_count_lotto_stakes_and_returns_net_of_clawbacks()
+    {
+        var wallet = await WalletAsync();
+        var transfers = new TransferHandler(new PostingRunner(wallet.Store), FixedRules.None, TimeProvider.System);
+        await transfers.CreditAsync("lotto:win:b-1:1", Punter, 900, "ZAR", "lotto win");
+        await transfers.DebitAsync("lotto:bet:b-2", Punter, 300, "ZAR", "lotto bet");
+        await transfers.DebitAsync("lotto:clawback:b-1:2", Punter, 400, "ZAR", "lotto override");
+
+        var totals = await wallet.Reconciliation.DayTotalsAsync(DateOnly.FromDateTime(DateTime.UtcNow), CancellationToken.None);
+
+        (totals.LottoStaked, totals.LottoReturned).ShouldBe((300L, 500L));
+    }
+
+    [Fact]
+    public async Task Lotto_money_is_not_counted_as_sportsbook_money()
+    {
+        var wallet = await WalletAsync();
+        await new TransferHandler(new PostingRunner(wallet.Store), FixedRules.None, TimeProvider.System).CreditAsync("lotto:win:b-3:1", Punter, 900, "ZAR", "lotto win");
+
+        (await wallet.Reconciliation.DayTotalsAsync(DateOnly.FromDateTime(DateTime.UtcNow), CancellationToken.None)).SportsCredits.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Another_day_counts_none_of_today()
     {
         var wallet = await WalletAsync();
