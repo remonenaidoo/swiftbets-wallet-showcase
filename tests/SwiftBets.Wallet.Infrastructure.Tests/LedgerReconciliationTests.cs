@@ -86,16 +86,17 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     }
 
     [Fact]
-    public async Task Day_totals_split_casino_money_from_sportsbook_money_by_its_casino_key()
+    public async Task Day_totals_split_casino_and_racing_money_from_sportsbook_money_by_their_keys()
     {
         var wallet = await WalletAsync();
         var transfers = new TransferHandler(new PostingRunner(wallet.Store), FixedRules.None, TimeProvider.System);
         await transfers.CreditAsync("casino:sim-seamless:w-1", Punter, 700, "ZAR", "casino win");
+        await transfers.CreditAsync("racing:payout:r-1", Punter, 1_300, "ZAR", "racing win");
         await transfers.CreditAsync("payout_c1_v1", Punter, 2_500, "ZAR", "payout");
 
         var totals = await wallet.Reconciliation.DayTotalsAsync(DateOnly.FromDateTime(DateTime.UtcNow), CancellationToken.None);
 
-        (totals.CasinoReturned, totals.SportsCredits).ShouldBe((700L, 2_500L));
+        (totals.CasinoReturned, totals.RacingReturned, totals.SportsCredits).ShouldBe((700L, 1_300L, 2_500L));
     }
 
     [Fact]
