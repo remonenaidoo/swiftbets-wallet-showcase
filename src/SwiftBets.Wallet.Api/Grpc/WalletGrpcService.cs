@@ -28,9 +28,7 @@ public sealed class WalletGrpcService(ReserveFundsHandler reserve, SettleReserva
         WalletReplies.Posting(await transfer.DebitAsync(Key(request.IdempotencyKey), Id(request.AccountId), Amount(request.Amount), request.Amount.Currency, request.Reference, request.Reason));
 
     public override async Task<BalanceReply> GetBalance(GetBalanceRequest request, ServerCallContext context) =>
-        await store.GetAccountAsync(Id(request.AccountId), context.CancellationToken) is { } account
-            ? new BalanceReply { Balance = WalletReplies.Balance(account) }
-            : new BalanceReply { Failure = WalletReplies.Failure(Domain.WalletFailure.AccountNotFound) };
+        new() { Balance = WalletReplies.Balance(await accounts.BalanceAsync(Id(request.AccountId), context.CancellationToken)) };
 
     public override async Task<ReservationReply> GetReservation(GetReservationRequest request, ServerCallContext context)
     {

@@ -9,7 +9,25 @@ namespace SwiftBets.Wallet.Application.Ledger;
 /// </summary>
 public sealed class AccountsHandler(IWalletStore store)
 {
+    /// <summary>The currency a customer's first account opens in, and the one an unopened wallet reports.</summary>
+    public const string HomeCurrency = "ZAR";
+
     public Task<IReadOnlyList<Account>> ListAsync(Guid userId, CancellationToken cancellationToken) => store.ListAccountsAsync(userId, cancellationToken);
+
+    /// <summary>
+    /// An account's balance. A customer who has never deposited has no account row yet; callers address the first
+    /// account by user id, so an unknown id with no accounts behind it is that customer, and their balance is zero.
+    /// </summary>
+    public async Task<Account> BalanceAsync(Guid accountId, CancellationToken cancellationToken)
+    {
+        if (await store.GetAccountAsync(accountId, cancellationToken) is { } account)
+        {
+            return account;
+        }
+
+        var owned = await store.ListAccountsAsync(accountId, cancellationToken);
+        return owned.Count > 0 ? owned[0] : new Account(accountId, AccountKind.Punter, HomeCurrency, available: 0, reserved: 0, isBlacklisted: false);
+    }
 
     public async Task<(Account? Account, WalletFailure? Failure)> OpenAsync(Guid userId, string currency, CancellationToken cancellationToken)
     {

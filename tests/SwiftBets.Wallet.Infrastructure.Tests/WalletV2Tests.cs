@@ -36,6 +36,38 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task A_customer_who_never_deposited_has_a_zero_rand_balance_not_a_missing_wallet()
+    {
+        var (store, _) = await WalletAsync();
+        var newcomer = Guid.NewGuid();
+
+        var balance = await new AccountsHandler(store).BalanceAsync(newcomer, CancellationToken.None);
+
+        balance.AccountId.ShouldBe(newcomer);
+        balance.UserId.ShouldBe(newcomer);
+        balance.Currency.ShouldBe("ZAR");
+        balance.Available.ShouldBe(0);
+        balance.Reserved.ShouldBe(0);
+        (await store.ListAccountsAsync(newcomer, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_opened_account_reports_its_real_balance_not_the_zero_default()
+    {
+        var (store, _) = await WalletAsync();
+        var customer = Guid.NewGuid();
+        var accounts = new AccountsHandler(store);
+        var usd = (await accounts.OpenAsync(customer, "USD", CancellationToken.None)).Account!;
+        var transfer = new TransferHandler(new PostingRunner(store), new FixedRules(new GamblingRules([], [])), _time);
+        (await transfer.DepositAsync("deposit_balance", usd.AccountId, 2_500, "USD", "pay_balance")).WasApplied.ShouldBeTrue();
+
+        var balance = await accounts.BalanceAsync(customer, CancellationToken.None);
+
+        balance.Currency.ShouldBe("USD");
+        balance.Available.ShouldBe(2_500);
+    }
+
+    [Fact]
     public async Task Concurrent_first_opens_end_with_one_account_per_currency()
     {
         var (store, _) = await WalletAsync();
