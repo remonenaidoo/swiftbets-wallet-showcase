@@ -7,6 +7,8 @@
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Grpc.Net.ClientFactory" />
+    <PackageReference Include="SwiftBets.Contracts.Grpc" />
     <PackageReference Include="SwiftBets.BuildingBlocks.Testing" />
     <ProjectReference Include="../../src/SwiftBets.Wallet.Api/SwiftBets.Wallet.Api.csproj" />
   </ItemGroup>

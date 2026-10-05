@@ -1,16 +1,25 @@
 using System.Net;
 using System.Net.Http.Json;
+using Grpc.Core;
+using Grpc.Net.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using SwiftBets.BuildingBlocks.Testing;
+using SwiftBets.Contracts.Grpc.Wallet.V1;
+using WalletGrpc = SwiftBets.Contracts.Grpc.Wallet.V1.Wallet;
 
 namespace SwiftBets.Wallet.Api.Tests;
 
 public sealed class HostTests : IClassFixture<HostTests.Factory>
 {
     private readonly HttpClient _client;
+    private readonly Factory _factory;
 
-    public HostTests(Factory factory) => _client = factory.CreateClient();
+    public HostTests(Factory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateClient();
+    }
 
     [Fact]
     public async Task Liveness_is_healthy_without_dependencies()
@@ -65,6 +74,39 @@ public sealed class HostTests : IClassFixture<HostTests.Factory>
         var body = await _client.GetStringAsync(new Uri("/metrics", UriKind.Relative), TestContext.Current.CancellationToken);
 
         body.ShouldContain("process_cpu_seconds_total");
+    }
+
+    [Fact]
+    public async Task GetBalance_without_a_token_is_unauthenticated()
+    {
+        var error = await BalanceError(token: null);
+
+        error.StatusCode.ShouldBe(StatusCode.Unauthenticated);
+    }
+
+    [Fact]
+    public async Task GetBalance_with_a_punter_token_is_forbidden()
+    {
+        var error = await BalanceError(TestJwt.Issue("punter-1", "Punter"));
+
+        error.StatusCode.ShouldBe(StatusCode.PermissionDenied);
+    }
+
+    [Fact]
+    public async Task GetBalance_with_a_service_token_is_not_an_auth_error()
+    {
+        var error = await BalanceError(TestJwt.Issue("client:payout", "Service"), accountId: "not-an-id");
+
+        error.StatusCode.ShouldBe(StatusCode.InvalidArgument);
+    }
+
+    private async Task<RpcException> BalanceError(string? token, string? accountId = null)
+    {
+        using var channel = GrpcChannel.ForAddress(_factory.Server.BaseAddress, new GrpcChannelOptions { HttpHandler = _factory.Server.CreateHandler() });
+        var client = new WalletGrpc.WalletClient(channel);
+        var headers = token is null ? null : new Metadata { { "authorization", $"Bearer {token}" } };
+        using var call = client.GetBalanceAsync(new GetBalanceRequest { AccountId = accountId ?? Guid.NewGuid().ToString() }, headers, cancellationToken: TestContext.Current.CancellationToken);
+        return await Should.ThrowAsync<RpcException>(() => call.ResponseAsync);
     }
 
     public sealed class Factory : WebApplicationFactory<Program>
