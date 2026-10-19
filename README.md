@@ -9,15 +9,15 @@ The SwiftBets wallet: the double-entry ledger, punter balances, reservations for
 | `SwiftBets.Wallet.Infrastructure` | Dapper over SQL Server (`SbWallet`), outbox to Kafka, the reconciliation worker and its metrics |
 | `SwiftBets.Wallet.Migrator` | DbUp migrations with rollbacks; `Migrator:SeedDemo=true` funds the demo punters |
 
-Images: `ghcr.io/remonenaidoo/swiftbets-wallet` and `swiftbets-wallet-migrator`.
-
 ## Build and test
 
 ```bash
-../swiftbets-platform/scripts/fetch-shared-packages.sh .
+scripts/fetch-shared-packages.sh .   # the shared packages, from public releases
 dotnet test
 ```
 
 Integration tests start SQL Server and Redpanda in Docker (Testcontainers).
 
-Moved out of `swiftbets-placement` with its full history (platform `scripts/split-repo.sh`).
+## Part of SwiftBets
+
+SwiftBets is a sportsbook and casino platform built as independent .NET services. It runs live at [swiftbets.remonenaidoo.com](https://swiftbets.remonenaidoo.com). These repositories show a selection of it: [Settlement](https://github.com/remonenaidoo/swiftbets-settlement-showcase) · [Originals](https://github.com/remonenaidoo/swiftbets-originals-showcase) · [Steward](https://github.com/remonenaidoo/swiftbets-steward-showcase) · [Building blocks](https://github.com/remonenaidoo/swiftbets-building-blocks-showcase) · [Contracts](https://github.com/remonenaidoo/swiftbets-contracts-showcase).
