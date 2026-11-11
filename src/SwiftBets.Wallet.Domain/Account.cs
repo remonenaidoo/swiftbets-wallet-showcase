@@ -1,9 +1,6 @@
 namespace SwiftBets.Wallet.Domain;
 
-/// <summary>
-/// A wallet account's balances. Punter balances can never go negative; house and funding accounts are the other side
-/// of every movement and may. Methods return the balanced posting to persist, or the reason the movement is refused.
-/// </summary>
+/// <summary>An account's balances. Punter balances never go negative; the house and funding sides may. Moves return why they were refused, or null.</summary>
 public sealed class Account
 {
     public Account(Guid accountId, AccountKind kind, string currency, long available, long reserved, bool isBlacklisted, Guid? userId = null, long bonus = 0)
@@ -20,7 +17,7 @@ public sealed class Account
 
     public Guid AccountId { get; }
 
-    /// <summary>The customer who owns a punter account; a user has one account per currency (ADR: currency accounts).</summary>
+    /// <summary>The customer who owns a punter account; a customer has one account per currency.</summary>
     public Guid UserId { get; }
 
     public AccountKind Kind { get; }
@@ -39,44 +36,21 @@ public sealed class Account
     public WalletFailure? Reserve(long amount, string currency) =>
         Validate(amount, currency) ?? (Available < amount ? WalletFailure.InsufficientFunds : Apply(-amount, amount));
 
-    /// <summary>Takes a stake from cash first and the rest from bonus money, if bonus money may be used; returns the bonus part.</summary>
+    /// <summary>Holds a stake from cash first and the rest from bonus money, if bonus money may be used; returns the bonus part.</summary>
     public (WalletFailure? Failure, long FromBonus) ReserveCashThenBonus(long amount, string currency, bool bonusUsable)
     {
-        if (Validate(amount, currency) is { } invalid)
+        var taken = TakeCashThenBonus(amount, currency, bonusUsable);
+        if (taken.Failure is null)
         {
-            return (invalid, 0);
+            Reserved += amount;
         }
 
-        var fromBonus = Math.Max(0, amount - Math.Max(0, Available));
-        if (fromBonus > 0 && (!bonusUsable || Bonus < fromBonus))
-        {
-            return (WalletFailure.InsufficientFunds, 0);
-        }
-
-        Available -= amount - fromBonus;
-        Bonus -= fromBonus;
-        Reserved += amount;
-        return (null, fromBonus);
+        return taken;
     }
 
     /// <summary>Pays straight out (a casino stake) from cash first, then bonus money if it may be used; returns the bonus part.</summary>
-    public (WalletFailure? Failure, long FromBonus) PayCashThenBonus(long amount, string currency, bool bonusUsable)
-    {
-        if (Validate(amount, currency) is { } invalid)
-        {
-            return (invalid, 0);
-        }
-
-        var fromBonus = Math.Max(0, amount - Math.Max(0, Available));
-        if (fromBonus > 0 && (!bonusUsable || Bonus < fromBonus))
-        {
-            return (WalletFailure.InsufficientFunds, 0);
-        }
-
-        Available -= amount - fromBonus;
-        Bonus -= fromBonus;
-        return (null, fromBonus);
-    }
+    public (WalletFailure? Failure, long FromBonus) PayCashThenBonus(long amount, string currency, bool bonusUsable) =>
+        TakeCashThenBonus(amount, currency, bonusUsable);
 
     /// <summary>Holds a free bet's stake: the money comes from the promotions account, not the customer.</summary>
     public WalletFailure? HoldFreeBet(long amount, string currency) =>
@@ -108,8 +82,16 @@ public sealed class Account
     }
 
     /// <summary>Adds bonus money from an offer.</summary>
-    public WalletFailure? ReceiveBonus(long amount, string currency) =>
-        Validate(amount, currency) ?? AddBonus(amount);
+    public WalletFailure? ReceiveBonus(long amount, string currency)
+    {
+        if (Validate(amount, currency) is { } invalid)
+        {
+            return invalid;
+        }
+
+        Bonus += amount;
+        return null;
+    }
 
     /// <summary>Empties the bonus balance (forfeit, expiry or conversion) and returns what it held.</summary>
     public long TakeBonus()
@@ -130,9 +112,6 @@ public sealed class Account
     public WalletFailure? ConsumeReservation(long amount) =>
         Reserved < amount ? WalletFailure.InvalidState : Apply(0, -amount);
 
-    public WalletFailure? ReturnReservation(long amount) =>
-        Reserved < amount ? WalletFailure.InvalidState : Apply(amount, -amount);
-
     public WalletFailure? Receive(long amount, string currency) =>
         Validate(amount, currency) ?? (Kind == AccountKind.Punter && IsBlacklisted ? WalletFailure.AccountBlacklisted : Apply(amount, 0));
 
@@ -144,10 +123,22 @@ public sealed class Account
         : !string.Equals(currency, Currency, StringComparison.Ordinal) ? WalletFailure.CurrencyMismatch
         : null;
 
-    private WalletFailure? AddBonus(long amount)
+    private (WalletFailure? Failure, long FromBonus) TakeCashThenBonus(long amount, string currency, bool bonusUsable)
     {
-        Bonus += amount;
-        return null;
+        if (Validate(amount, currency) is { } invalid)
+        {
+            return (invalid, 0);
+        }
+
+        var fromBonus = Math.Max(0, amount - Math.Max(0, Available));
+        if (fromBonus > 0 && (!bonusUsable || Bonus < fromBonus))
+        {
+            return (WalletFailure.InsufficientFunds, 0);
+        }
+
+        Available -= amount - fromBonus;
+        Bonus -= fromBonus;
+        return (null, fromBonus);
     }
 
     private WalletFailure? Apply(long availableDelta, long reservedDelta)

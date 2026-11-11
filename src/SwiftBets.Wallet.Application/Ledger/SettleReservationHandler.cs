@@ -79,7 +79,7 @@ public sealed class SettleReservationHandler(PostingRunner runner, IWalletStore 
             // A released stake was never at risk, so it comes off the totals of the periods it was placed in.
             if (release && !isWithdrawal && account.Kind == AccountKind.Punter)
             {
-                await transaction.AddSpendAsync(account.AccountId, await transaction.ReservedAtAsync(reservationId), -(reservation.Amount - reservation.BonusAmount - (reservation.FreeBetId is null ? 0 : reservation.Amount)), 0, 0);
+                await transaction.AddSpendAsync(account.AccountId, await transaction.ReservedAtAsync(reservationId), -reservation.CashAmount, 0, 0);
             }
 
             List<LedgerEntry> entries = [new(account.AccountId, Bucket.Reserved, -reservation.Amount)];
@@ -89,8 +89,9 @@ public sealed class SettleReservationHandler(PostingRunner runner, IWalletStore 
             }
             else
             {
+                // A zero cash leg is kept only when nothing else moves, so the posting still has two sides.
                 var cash = reservation.Amount - toBonus - toPromotions;
-                if (cash != 0 || entries.Count + (toBonus != 0 ? 1 : 0) + (toPromotions != 0 ? 1 : 0) < 2)
+                if (cash != 0 || (toBonus == 0 && toPromotions == 0))
                 {
                     entries.Add(new(account.AccountId, Bucket.Available, cash));
                 }
