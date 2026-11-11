@@ -3,10 +3,7 @@ using System.Text;
 
 namespace SwiftBets.Wallet.Domain.Vouchers;
 
-/// <summary>
-/// A 16-character voucher code: 15 characters drawn from an alphabet without look-alikes (no 0, O, 1, I or L) and a
-/// Luhn mod 31 check character, printed in groups of four. A typo is caught by the check before any lookup.
-/// </summary>
+/// <summary>16 characters from an alphabet without look-alikes, the last a Luhn mod 31 check, so a typo fails before any lookup.</summary>
 public static class VoucherCode
 {
     public const string Alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";

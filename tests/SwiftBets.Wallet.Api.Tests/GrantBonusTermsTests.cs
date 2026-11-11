@@ -4,7 +4,7 @@ using SwiftBets.Wallet.Api.Grpc;
 
 namespace SwiftBets.Wallet.Api.Tests;
 
-/// <summary>GrantBonus maps its request onto the bonus ledger's terms (D199).</summary>
+/// <summary>GrantBonus maps its request onto the bonus ledger's terms.</summary>
 public sealed class GrantBonusTermsTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 1, 10, 0, 0, TimeSpan.Zero);

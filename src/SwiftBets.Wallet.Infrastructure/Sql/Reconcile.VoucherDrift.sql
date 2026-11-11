@@ -1,4 +1,4 @@
--- Each voucher liability account against the vouchers still open in its currency (D168).
+-- Each voucher liability account against the vouchers still open in its currency.
 SELECT TOP (@Limit) CAST(7 AS tinyint) AS Kind, a.AccountId, CAST(NULL AS uniqueidentifier) AS PostingId,
        COALESCE(v.Outstanding, 0) AS Expected, COALESCE(e.Total, 0) AS Actual
 FROM wallet.Accounts a

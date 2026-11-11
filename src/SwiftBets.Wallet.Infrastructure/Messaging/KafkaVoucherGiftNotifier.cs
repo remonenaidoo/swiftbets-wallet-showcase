@@ -10,10 +10,7 @@ using SwiftBets.Wallet.Domain.Vouchers;
 
 namespace SwiftBets.Wallet.Infrastructure.Messaging;
 
-/// <summary>
-/// Asks notifications to email a bought voucher to its recipient. The notification id comes from the voucher, so a
-/// repeated send is dropped by notifications. A failure is logged: the buyer still has the code to pass on.
-/// </summary>
+/// <summary>Best effort: the notification id comes from the voucher so a repeat is dropped, and a failure is only logged.</summary>
 public sealed partial class KafkaVoucherGiftNotifier(IEventPublisher publisher, TimeProvider time, ILogger<KafkaVoucherGiftNotifier> logger) : IVoucherGiftNotifier
 {
     public const string Template = "wallet.voucher-gift";

@@ -3,10 +3,7 @@ using SwiftBets.Wallet.Domain;
 
 namespace SwiftBets.Wallet.Application.Ledger;
 
-/// <summary>
-/// A customer's accounts, one per currency. The first one takes the user id as its account id, so placement and payout,
-/// which address the account by user id, keep working; later currencies get new ids.
-/// </summary>
+/// <summary>One account per currency; the first takes the user id as its id, because placement and payout address it by user id.</summary>
 public sealed class AccountsHandler(IWalletStore store)
 {
     /// <summary>The currency a customer's first account opens in, and the one an unopened wallet reports.</summary>
@@ -14,10 +11,7 @@ public sealed class AccountsHandler(IWalletStore store)
 
     public Task<IReadOnlyList<Account>> ListAsync(Guid userId, CancellationToken cancellationToken) => store.ListAccountsAsync(userId, cancellationToken);
 
-    /// <summary>
-    /// An account's balance. A customer who has never deposited has no account row yet; callers address the first
-    /// account by user id, so an unknown id with no accounts behind it is that customer, and their balance is zero.
-    /// </summary>
+    /// <summary>A customer who never deposited has no account row, so an unknown id with no accounts is them, with a zero balance.</summary>
     public async Task<Account> BalanceAsync(Guid accountId, CancellationToken cancellationToken)
     {
         if (await store.GetAccountAsync(accountId, cancellationToken) is { } account)

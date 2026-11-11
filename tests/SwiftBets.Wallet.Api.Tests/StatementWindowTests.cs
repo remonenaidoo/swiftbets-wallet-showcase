@@ -3,7 +3,7 @@ using SwiftBets.Wallet.Domain;
 
 namespace SwiftBets.Wallet.Api.Tests;
 
-/// <summary>A statement is always a bounded range (D196).</summary>
+/// <summary>A statement is always a bounded range.</summary>
 public sealed class StatementWindowTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 4, 10, 0, 0, TimeSpan.Zero);

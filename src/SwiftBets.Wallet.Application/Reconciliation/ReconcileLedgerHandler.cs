@@ -3,11 +3,7 @@ using SwiftBets.Wallet.Domain;
 
 namespace SwiftBets.Wallet.Application.Reconciliation;
 
-/// <summary>
-/// Asserts the ledger invariants: every punter balance equals the sum of its entries, reserved funds equal held
-/// reservations, voucher liabilities equal open vouchers, every posting balances, and the whole ledger sums to zero. It reports and records drift; it never
-/// repairs, because a wrong balance needs a human to decide which side is wrong.
-/// </summary>
+/// <summary>Reports drift and never repairs it: a wrong balance needs a human to decide which side is wrong.</summary>
 public sealed class ReconcileLedgerHandler(IReconciliationStore store, TimeProvider time)
 {
     public async Task<ReconciliationReport> HandleAsync(CancellationToken cancellationToken)

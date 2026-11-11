@@ -4,11 +4,7 @@ using SwiftBets.Wallet.Domain.Bonus;
 
 namespace SwiftBets.Wallet.Application.Ledger;
 
-/// <summary>
-/// Ends a held reservation: a stake is captured into the house, a withdrawal is paid out to the funding account, and
-/// either can be released back to the punter. Capturing a withdrawal as a stake (or the reverse) is refused. A captured
-/// stake counts towards the active bonus's wagering; a released one goes back the way it was paid (D166).
-/// </summary>
+/// <summary>Captures a stake into the house, pays a withdrawal out to funding, or releases either back the way it was paid.</summary>
 public sealed class SettleReservationHandler(PostingRunner runner, IWalletStore store, BonusLedgerHandler bonuses)
 {
     public Task<WalletOutcome> CaptureAsync(string idempotencyKey, Guid reservationId, CancellationToken cancellationToken) =>
@@ -118,10 +114,7 @@ public sealed class SettleReservationHandler(PostingRunner runner, IWalletStore 
         return outcome;
     }
 
-    /// <summary>
-    /// How much of a released stake goes back to bonus: all its bonus part while that offer is live, into cash once the
-    /// offer converted, and to the promotions account if the offer was forfeited or expired meanwhile.
-    /// </summary>
+    /// <summary>A released stake's bonus part goes back to bonus while its offer is live, to cash once converted, else to promotions.</summary>
     private static async Task<(long ToBonus, long Forfeit)> BonusReturnAsync(IWalletTransaction transaction, Reservation reservation)
     {
         if (reservation.BonusAmount == 0)

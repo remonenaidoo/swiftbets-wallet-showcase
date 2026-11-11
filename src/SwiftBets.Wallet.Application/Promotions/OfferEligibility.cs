@@ -3,10 +3,7 @@ using SwiftBets.Wallet.Domain.ResponsibleGambling;
 
 namespace SwiftBets.Wallet.Application.Promotions;
 
-/// <summary>
-/// Responsible gambling comes before offers: a self-excluded, cooling-off or betting-blocked customer sees no offers and
-/// gets no awards, and a customer who turned offers off gets none either.
-/// </summary>
+/// <summary>A blocked or excluded customer, or one who turned offers off, gets no offers.</summary>
 public sealed class OfferEligibility(IGamblingRules rules, IPromotionStore store, TimeProvider time)
 {
     public bool IsRestricted(Guid userId) =>

@@ -5,10 +5,7 @@ using SwiftBets.Wallet.Domain.ResponsibleGambling;
 
 namespace SwiftBets.Wallet.Infrastructure.ResponsibleGambling;
 
-/// <summary>
-/// Reads compliance's compacted snapshot, held in memory by every replica. The wallet reports unready until the topic has
-/// been read to its end, so it never judges a stake against rules it has not seen.
-/// </summary>
+/// <summary>The wallet reports unready until compliance's topic is read to its end, so it never judges against rules it has not seen.</summary>
 public sealed class CompactedGamblingRules(ICompactedState<RestrictionsChangedV1> state) : IGamblingRules
 {
     public GamblingRules For(Guid userId) =>
