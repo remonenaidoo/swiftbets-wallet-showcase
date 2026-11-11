@@ -23,6 +23,9 @@ public sealed class Reservation(Guid reservationId, Guid accountId, long amount,
     /// <summary>Set when the whole stake is a free bet, paid from the promotions account rather than the customer.</summary>
     public Guid? FreeBetId { get; } = freeBetId;
 
+    /// <summary>The part of the stake that was the customer's own cash, which is all their limits ever counted.</summary>
+    public long CashAmount => FreeBetId is null ? Amount - BonusAmount : 0;
+
     public WalletFailure? MoveTo(ReservationState target)
     {
         if (State != ReservationState.Held)
