@@ -56,7 +56,7 @@ public sealed class SqlWalletStore(ISqlConnectionFactory connections, TimeProvid
         return await GetAccountAsync(accountId, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken, IReadOnlyCollection<PostingKind>? kinds = null)
+    public async Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, IReadOnlyCollection<PostingKind>? kinds, CancellationToken cancellationToken)
     {
         await using var connection = await connections.OpenAsync(cancellationToken);
         var parameters = new { AccountId = accountId, Before = before, Limit = limit, From = from, To = to, AnyKind = kinds is null, Kinds = (kinds ?? []).Select(k => (int)k).ToArray() };
