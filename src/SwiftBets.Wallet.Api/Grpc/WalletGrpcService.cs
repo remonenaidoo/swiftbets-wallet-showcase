@@ -14,7 +14,7 @@ public sealed class WalletGrpcService(
     ReserveFundsHandler reserve, SettleReservationHandler settle, TransferHandler transfer, AccountsHandler accounts, IWalletStore store, BonusLedgerHandler bonuses, TimeProvider time) : WalletBase
 {
     public override async Task<ReservationReply> Reserve(ReserveRequest request, ServerCallContext context) =>
-        WalletReplies.Reservation(await reserve.HandleAsync(Key(request.IdempotencyKey), Id(request.AccountId), Amount(request.Amount), request.Amount.Currency, request.Reference, Terms(request)));
+        WalletReplies.Reservation(await reserve.HoldStakeAsync(Key(request.IdempotencyKey), Id(request.AccountId), Amount(request.Amount), request.Amount.Currency, request.Reference, Terms(request)));
 
     public override async Task<ReservationReply> Capture(ReservationCommand request, ServerCallContext context) =>
         WalletReplies.Reservation(await settle.CaptureAsync(Key(request.IdempotencyKey), Id(request.ReservationId), context.CancellationToken));
