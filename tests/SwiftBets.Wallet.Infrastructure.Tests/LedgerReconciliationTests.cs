@@ -62,7 +62,7 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     public async Task Reservation_released_without_returning_the_funds_is_reported()
     {
         var wallet = await WalletAsync();
-        var reservation = (await TestLedger.Reserve(wallet.ConnectionString, FixedRules.None, TimeProvider.System).HandleAsync("held_reserve", Punter, 1_500, "ZAR", "held")).Reservation!;
+        var reservation = (await TestLedger.Reserve(wallet.ConnectionString, FixedRules.None, TimeProvider.System).HoldStakeAsync("held_reserve", Punter, 1_500, "ZAR", "held")).Reservation!;
         await wallet.ExecuteAsync("UPDATE wallet.Reservations SET State = 3 WHERE ReservationId = @Id", new { Id = reservation.ReservationId });
 
         var report = await wallet.Handler.HandleAsync(CancellationToken.None);
@@ -146,7 +146,7 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     {
         public async Task ActivityAsync()
         {
-            var reservation = (await TestLedger.Reserve(ConnectionString, FixedRules.None, TimeProvider.System).HandleAsync("a_reserve", Punter, 2_000, "ZAR", "a")).Reservation!;
+            var reservation = (await TestLedger.Reserve(ConnectionString, FixedRules.None, TimeProvider.System).HoldStakeAsync("a_reserve", Punter, 2_000, "ZAR", "a")).Reservation!;
             await TestLedger.Settle(ConnectionString, TimeProvider.System).CaptureAsync("a_capture", reservation.ReservationId, CancellationToken.None);
             var transfers = TestLedger.Transfer(ConnectionString, FixedRules.None, TimeProvider.System);
             await transfers.CreditAsync("a_win", Punter, 5_000, "ZAR", "a");

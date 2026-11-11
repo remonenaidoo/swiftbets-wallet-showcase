@@ -27,7 +27,7 @@ public sealed class BonusWalletTests(SqlServerFixture sql)
         var w = await WalletAsync();
         await GrantAsync(w, 5_000, multiplier: 40);
 
-        var reserve = await w.Reserve.HandleAsync("c1_reserve", Punter, 102_000, "ZAR", "coupon c1", new StakeTerms(StakeProduct.Sport, 200));
+        var reserve = await w.Reserve.HoldStakeAsync("c1_reserve", Punter, 102_000, "ZAR", "coupon c1", new StakeTerms(StakeProduct.Sport, 200));
 
         reserve.Reservation!.BonusAmount.ShouldBe(2_000);
         reserve.Account!.Available.ShouldBe(0);
@@ -41,7 +41,7 @@ public sealed class BonusWalletTests(SqlServerFixture sql)
         var w = await WalletAsync();
         await GrantAsync(w, 5_000, multiplier: 40);
 
-        var reserve = await w.Reserve.HandleAsync("c1_reserve", Punter, 102_000, "ZAR", "coupon c1", new StakeTerms(StakeProduct.Sport, 120));
+        var reserve = await w.Reserve.HoldStakeAsync("c1_reserve", Punter, 102_000, "ZAR", "coupon c1", new StakeTerms(StakeProduct.Sport, 120));
 
         reserve.Failure.ShouldBe(WalletFailure.InsufficientFunds);
         (await w.Store.GetAccountAsync(Punter, CancellationToken.None))!.Bonus.ShouldBe(5_000);
@@ -53,7 +53,7 @@ public sealed class BonusWalletTests(SqlServerFixture sql)
         var w = await WalletAsync();
         await GrantAsync(w, 5_000, multiplier: 40);
         var couponId = Guid.NewGuid();
-        var reserve = await w.Reserve.HandleAsync("c_reserve", Punter, 102_000, "ZAR", $"coupon {couponId}", new StakeTerms(StakeProduct.Sport, 200));
+        var reserve = await w.Reserve.HoldStakeAsync("c_reserve", Punter, 102_000, "ZAR", $"coupon {couponId}", new StakeTerms(StakeProduct.Sport, 200));
         await w.Settle.CaptureAsync("c_capture", reserve.Reservation!.ReservationId, CancellationToken.None);
 
         var credit = await w.Transfer.CreditAsync("c_pay", Punter, 204_000, "ZAR", $"coupon {couponId} settlement v1");
@@ -69,7 +69,7 @@ public sealed class BonusWalletTests(SqlServerFixture sql)
     {
         var w = await WalletAsync();
         await GrantAsync(w, 5_000, multiplier: 1);
-        var reserve = await w.Reserve.HandleAsync("c_reserve", Punter, 6_000, "ZAR", "coupon c", new StakeTerms(StakeProduct.Sport, 200));
+        var reserve = await w.Reserve.HoldStakeAsync("c_reserve", Punter, 6_000, "ZAR", "coupon c", new StakeTerms(StakeProduct.Sport, 200));
 
         await w.Settle.CaptureAsync("c_capture", reserve.Reservation!.ReservationId, CancellationToken.None);
 
@@ -86,7 +86,7 @@ public sealed class BonusWalletTests(SqlServerFixture sql)
         var w = await WalletAsync();
         var freeBet = await FreeBetAsync(w, 1_000, minOdds: 200);
         var couponId = Guid.NewGuid();
-        var reserve = await w.Reserve.HandleAsync("fb_reserve", Punter, 1_000, "ZAR", $"coupon {couponId}", new StakeTerms(StakeProduct.Sport, 300, freeBet));
+        var reserve = await w.Reserve.HoldStakeAsync("fb_reserve", Punter, 1_000, "ZAR", $"coupon {couponId}", new StakeTerms(StakeProduct.Sport, 300, freeBet));
         await w.Settle.CaptureAsync("fb_capture", reserve.Reservation!.ReservationId, CancellationToken.None);
 
         var credit = await w.Transfer.CreditAsync("fb_pay", Punter, 3_000, "ZAR", $"coupon {couponId} settlement v1");
@@ -103,7 +103,7 @@ public sealed class BonusWalletTests(SqlServerFixture sql)
         var w = await WalletAsync();
         var freeBet = await FreeBetAsync(w, 1_000, minOdds: 200);
 
-        var reserve = await w.Reserve.HandleAsync("fb_reserve", Punter, 1_000, "ZAR", "coupon x", new StakeTerms(StakeProduct.Sport, 150, freeBet));
+        var reserve = await w.Reserve.HoldStakeAsync("fb_reserve", Punter, 1_000, "ZAR", "coupon x", new StakeTerms(StakeProduct.Sport, 150, freeBet));
 
         reserve.Failure.ShouldBe(WalletFailure.InvalidState);
         (await w.Bonuses.AvailableFreeBetsAsync(Punter, _time.GetUtcNow(), CancellationToken.None)).Single().FreeBetId.ShouldBe(freeBet);
@@ -240,7 +240,7 @@ public sealed class BonusWalletTests(SqlServerFixture sql)
         var second = Guid.NewGuid();
         foreach (var coupon in new[] { first, second })
         {
-            var reserve = await w.Reserve.HandleAsync($"{coupon:N}_reserve", Punter, 1_000, "ZAR", $"coupon {coupon}");
+            var reserve = await w.Reserve.HoldStakeAsync($"{coupon:N}_reserve", Punter, 1_000, "ZAR", $"coupon {coupon}");
             await w.Settle.CaptureAsync($"{coupon:N}_capture", reserve.Reservation!.ReservationId, CancellationToken.None);
             _time.Advance(TimeSpan.FromSeconds(1));
         }

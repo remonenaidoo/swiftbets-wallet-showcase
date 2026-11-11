@@ -27,7 +27,7 @@ public sealed class ResponsibleGamblingTests(SqlServerFixture sql)
         var rules = new FixedRules(Limit(SpendKind.Stake, SpendPeriod.Day, 10_000));
 
         var outcomes = await Task.WhenAll(Enumerable.Range(0, 20).Select(i =>
-            TestLedger.Reserve(connectionString, rules, time).HandleAsync($"c{i}_reserve", Punter, 1_000, "ZAR", $"c{i}")));
+            TestLedger.Reserve(connectionString, rules, time).HoldStakeAsync($"c{i}_reserve", Punter, 1_000, "ZAR", $"c{i}")));
 
         outcomes.Count(o => o.WasApplied).ShouldBe(10);
         outcomes.Where(o => !o.WasApplied).ShouldAllBe(o => o.Failure == WalletFailure.LimitExceeded && o.Detail == "stake limit per day: 0 left");
@@ -40,12 +40,12 @@ public sealed class ResponsibleGamblingTests(SqlServerFixture sql)
         var (store, connectionString) = await WalletAsync();
         var rules = new FixedRules(Limit(SpendKind.Stake, SpendPeriod.Week, 3_000));
         var reserve = TestLedger.Reserve(connectionString, rules, time);
-        var reservation = (await reserve.HandleAsync("a_reserve", Punter, 3_000, "ZAR", "a")).Reservation!;
-        (await reserve.HandleAsync("b_reserve", Punter, 1, "ZAR", "b")).Failure.ShouldBe(WalletFailure.LimitExceeded);
+        var reservation = (await reserve.HoldStakeAsync("a_reserve", Punter, 3_000, "ZAR", "a")).Reservation!;
+        (await reserve.HoldStakeAsync("b_reserve", Punter, 1, "ZAR", "b")).Failure.ShouldBe(WalletFailure.LimitExceeded);
 
         await TestLedger.Settle(connectionString, time).ReleaseAsync("a_release", reservation.ReservationId, CancellationToken.None);
 
-        (await reserve.HandleAsync("c_reserve", Punter, 3_000, "ZAR", "c")).WasApplied.ShouldBeTrue();
+        (await reserve.HoldStakeAsync("c_reserve", Punter, 3_000, "ZAR", "c")).WasApplied.ShouldBeTrue();
     }
 
     [Fact]
@@ -55,14 +55,14 @@ public sealed class ResponsibleGamblingTests(SqlServerFixture sql)
         var rules = new FixedRules(Limit(SpendKind.Loss, SpendPeriod.Month, 2_000));
         var reserve = TestLedger.Reserve(connectionString, rules, time);
         var transfers = TestLedger.Transfer(connectionString, rules, time);
-        (await reserve.HandleAsync("a_reserve", Punter, 2_000, "ZAR", "a")).WasApplied.ShouldBeTrue();
-        (await reserve.HandleAsync("b_reserve", Punter, 500, "ZAR", "b")).Failure.ShouldBe(WalletFailure.LimitExceeded);
+        (await reserve.HoldStakeAsync("a_reserve", Punter, 2_000, "ZAR", "a")).WasApplied.ShouldBeTrue();
+        (await reserve.HoldStakeAsync("b_reserve", Punter, 500, "ZAR", "b")).Failure.ShouldBe(WalletFailure.LimitExceeded);
 
         await transfers.CreditAsync("a_win", Punter, 1_000, "ZAR", "a");
-        (await reserve.HandleAsync("c_reserve", Punter, 1_000, "ZAR", "c")).WasApplied.ShouldBeTrue();
+        (await reserve.HoldStakeAsync("c_reserve", Punter, 1_000, "ZAR", "c")).WasApplied.ShouldBeTrue();
 
         await transfers.DebitAsync("a_clawback", Punter, 1_000, "ZAR", "a");
-        (await reserve.HandleAsync("d_reserve", Punter, 1, "ZAR", "d")).Failure.ShouldBe(WalletFailure.LimitExceeded);
+        (await reserve.HoldStakeAsync("d_reserve", Punter, 1, "ZAR", "d")).Failure.ShouldBe(WalletFailure.LimitExceeded);
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class ResponsibleGamblingTests(SqlServerFixture sql)
         var rules = new FixedRules(new GamblingRules([], [new SpendBlock(BlockKind.Exclusion, time.GetUtcNow().AddDays(-1), time.GetUtcNow().AddMonths(6))]));
         var transfers = TestLedger.Transfer(connectionString, rules, time);
 
-        var stake = await TestLedger.Reserve(connectionString, rules, time).HandleAsync("x_reserve", Punter, 100, "ZAR", "x");
+        var stake = await TestLedger.Reserve(connectionString, rules, time).HoldStakeAsync("x_reserve", Punter, 100, "ZAR", "x");
         var deposit = await transfers.TopUpAsync("x_topup", Punter, 100, "ZAR", "x");
         var winnings = await transfers.CreditAsync("x_win", Punter, 100, "ZAR", "x");
 
@@ -127,10 +127,10 @@ public sealed class ResponsibleGamblingTests(SqlServerFixture sql)
         var rules = new FixedRules(Limit(SpendKind.Stake, SpendPeriod.Month, 1_000, pending: 5_000, due: time.GetUtcNow().AddHours(24)));
         var reserve = TestLedger.Reserve(connectionString, rules, time);
 
-        (await reserve.HandleAsync("a_reserve", Punter, 2_000, "ZAR", "a")).Failure.ShouldBe(WalletFailure.LimitExceeded);
+        (await reserve.HoldStakeAsync("a_reserve", Punter, 2_000, "ZAR", "a")).Failure.ShouldBe(WalletFailure.LimitExceeded);
         time.Advance(TimeSpan.FromHours(24));
 
-        (await reserve.HandleAsync("b_reserve", Punter, 2_000, "ZAR", "b")).WasApplied.ShouldBeTrue();
+        (await reserve.HoldStakeAsync("b_reserve", Punter, 2_000, "ZAR", "b")).WasApplied.ShouldBeTrue();
     }
 
     [Fact]

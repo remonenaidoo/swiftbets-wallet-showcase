@@ -150,7 +150,7 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
         var reserve = TestLedger.Reserve(connectionString, FixedRules.None, _time);
         var settle = TestLedger.Settle(connectionString, _time);
         var withdrawal = (await reserve.HoldWithdrawalAsync("wd_4_hold", Punter, 5_000, "ZAR", "wd_4")).Reservation!;
-        var stake = (await reserve.HandleAsync("c9_reserve", Punter, 1_000, "ZAR", "c9")).Reservation!;
+        var stake = (await reserve.HoldStakeAsync("c9_reserve", Punter, 1_000, "ZAR", "c9")).Reservation!;
 
         (await settle.ReleaseAsync("wd_4_release", withdrawal.ReservationId, CancellationToken.None)).WasApplied.ShouldBeTrue();
         (await settle.CompleteWithdrawalAsync("c9_paid", stake.ReservationId, CancellationToken.None)).Failure.ShouldBe(WalletFailure.InvalidState);
@@ -168,7 +168,7 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
         var transfer = TestLedger.Transfer(connectionString, FixedRules.None, _time);
         var reserve = TestLedger.Reserve(connectionString, FixedRules.None, _time);
         await transfer.DepositAsync("deposit_s1", Punter, 5_000, "ZAR", "pay_s1");
-        await reserve.HandleAsync("cs_reserve", Punter, 2_000, "ZAR", "cs");
+        await reserve.HoldStakeAsync("cs_reserve", Punter, 2_000, "ZAR", "cs");
         await reserve.HoldWithdrawalAsync("wds_hold", Punter, 1_000, "ZAR", "wds");
 
         var first = await store.StatementAsync(Punter, null, 2, null, null, null, CancellationToken.None);
@@ -201,7 +201,7 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
         var transfer = TestLedger.Transfer(connectionString, FixedRules.None, _time);
         var reserve = TestLedger.Reserve(connectionString, FixedRules.None, _time);
         await transfer.DepositAsync("deposit_b1", Punter, 5_000, "ZAR", "pay_b1");
-        await reserve.HandleAsync("b_reserve", Punter, 2_000, "ZAR", "b");
+        await reserve.HoldStakeAsync("b_reserve", Punter, 2_000, "ZAR", "b");
         await reserve.HoldWithdrawalAsync("wdb_hold", Punter, 1_000, "ZAR", "wdb");
         await using var connection = new SqlConnection(connectionString);
         const string Stored = "SELECT Sequence, MAX(AvailableAfter) AS A, MAX(BonusAfter) AS B FROM wallet.LedgerEntries WHERE AccountId = @Punter GROUP BY Sequence ORDER BY Sequence";
@@ -247,7 +247,7 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
         var transfer = TestLedger.Transfer(connectionString, FixedRules.None, _time);
         var reserve = TestLedger.Reserve(connectionString, FixedRules.None, _time);
         await transfer.DepositAsync("deposit_t1", Punter, 1_000, "ZAR", "pay_t1");
-        await reserve.HandleAsync("t_reserve", Punter, 500, "ZAR", "t");
+        await reserve.HoldStakeAsync("t_reserve", Punter, 500, "ZAR", "t");
         await transfer.DepositAsync("deposit_t2", Punter, 2_000, "ZAR", "pay_t2");
         PostingKind[] deposits = [PostingKind.Deposit, PostingKind.TopUp];
 

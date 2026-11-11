@@ -8,7 +8,7 @@ namespace SwiftBets.Wallet.Application.Ledger;
 /// <summary>Holds a stake (cash, then bonus money, or a free bet) or a withdrawal. Only the cash part counts against limits.</summary>
 public sealed class ReserveFundsHandler(PostingRunner runner, IGamblingRules rules, TimeProvider time)
 {
-    public Task<WalletOutcome> HandleAsync(string idempotencyKey, Guid accountId, long amount, string currency, string reference, StakeTerms? terms = null) =>
+    public Task<WalletOutcome> HoldStakeAsync(string idempotencyKey, Guid accountId, long amount, string currency, string reference, StakeTerms? terms = null) =>
         runner.RunAsync(idempotencyKey, PostingKind.Reserve, accountId, amount, async transaction =>
         {
             if (await transaction.LockAccountAsync(accountId) is not { } account)

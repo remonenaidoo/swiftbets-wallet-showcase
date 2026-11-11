@@ -19,7 +19,7 @@ public sealed class WalletLedgerTests(SqlServerFixture sql)
         var (store, connectionString) = await WalletAsync();
 
         var outcomes = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ =>
-            TestLedger.Reserve(connectionString, FixedRules.None, TimeProvider.System).HandleAsync("coupon-1_reserve", Punter, 2_500, "ZAR", "coupon-1")));
+            TestLedger.Reserve(connectionString, FixedRules.None, TimeProvider.System).HoldStakeAsync("coupon-1_reserve", Punter, 2_500, "ZAR", "coupon-1")));
 
         outcomes.Count(o => o.WasApplied).ShouldBe(1);
         outcomes.ShouldAllBe(o => o.Failure == null && o.Reservation!.ReservationId == outcomes[0].Reservation!.ReservationId);
@@ -32,7 +32,7 @@ public sealed class WalletLedgerTests(SqlServerFixture sql)
     public async Task Releasing_a_captured_reservation_is_refused()
     {
         var (store, connectionString) = await WalletAsync();
-        var reservation = (await TestLedger.Reserve(connectionString, FixedRules.None, TimeProvider.System).HandleAsync("c2_reserve", Punter, 1_000, "ZAR", "c2")).Reservation!;
+        var reservation = (await TestLedger.Reserve(connectionString, FixedRules.None, TimeProvider.System).HoldStakeAsync("c2_reserve", Punter, 1_000, "ZAR", "c2")).Reservation!;
         var settle = TestLedger.Settle(connectionString, TimeProvider.System);
         (await settle.CaptureAsync("c2_capture", reservation.ReservationId, CancellationToken.None)).WasApplied.ShouldBeTrue();
 
