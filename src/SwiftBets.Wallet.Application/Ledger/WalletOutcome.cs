@@ -1,5 +1,5 @@
-using SwiftBets.Wallet.Domain.ResponsibleGambling;
 using SwiftBets.Wallet.Domain;
+using SwiftBets.Wallet.Domain.ResponsibleGambling;
 
 namespace SwiftBets.Wallet.Application.Ledger;
 
@@ -9,14 +9,9 @@ public sealed record WalletOutcome(bool WasApplied, WalletFailure? Failure, Guid
     public static WalletOutcome Failed(WalletFailure failure, string? detail = null) => new(false, failure, null, null, null, detail);
 }
 
-/// <summary>Thrown inside a posting to refuse it with a reason; the runner rolls back and returns the refusal.</summary>
-public sealed class WalletRefusedException(WalletFailure failure, string detail, LimitHit? limit = null) : Exception(detail)
+/// <summary>A stake or deposit refused at one of the customer's own limits.</summary>
+public sealed record LimitHit(Guid UserId, SpendLimit Limit, string Refused, long Attempted, string Currency)
 {
-    public WalletFailure Failure { get; } = failure;
-
-    /// <summary>Set when the customer's own limit refused the movement, so they can be told once the transaction is gone.</summary>
-    public LimitHit? Limit { get; } = limit;
+    public static LimitHit? From(SpendRefusal refusal, Account account, string refused, long attempted) =>
+        refusal.Limit is { } limit ? new LimitHit(account.UserId, limit, refused, attempted, account.Currency) : null;
 }
-
-/// <summary>A stake or deposit refused at one of the customer's limits.</summary>
-public sealed record LimitHit(Guid UserId, SpendLimit Limit, string Refused, long Attempted, string Currency);

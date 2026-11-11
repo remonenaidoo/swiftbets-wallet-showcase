@@ -17,33 +17,33 @@ public sealed class BonusLedgerHandler(PostingRunner runner, IBonusStore bonuses
             var account = await transaction.LockAccountAsync(accountId);
             if (account is null || account.Kind != AccountKind.Punter)
             {
-                return (WalletFailure.AccountNotFound, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.AccountNotFound);
             }
 
             if (WellKnownAccounts.PromotionsFor(currency) is not { } promotions)
             {
-                return (WalletFailure.CurrencyMismatch, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.CurrencyMismatch);
             }
 
             if (account.IsBlacklisted)
             {
-                return (WalletFailure.AccountBlacklisted, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.AccountBlacklisted);
             }
 
             if (await transaction.ActiveGrantAsync(accountId) is not null)
             {
-                throw new WalletRefusedException(WalletFailure.InvalidState, "a bonus is already active");
+                return PostingResult.Refuse(WalletFailure.InvalidState, "a bonus is already active");
             }
 
             if (account.ReceiveBonus(terms.Amount, currency) is { } failure)
             {
-                return (failure, null, [], null, false);
+                return PostingResult.Refuse(failure);
             }
 
             await transaction.SaveGrantAsync(new BonusGrant(Guid.CreateVersion7(), accountId, terms.PromotionId, terms.Amount, terms.Amount * terms.WageringMultiplier, 0,
                 terms.MinOddsHundredths, terms.SportsPercent, terms.CasinoPercent, terms.ExpiresAt, BonusState.Active), isNew: true);
-            return (null, new Posting(Guid.CreateVersion7(), PostingKind.BonusGranted, idempotencyKey, reference,
-                [new(promotions, Bucket.Available, -terms.Amount), new(accountId, Bucket.Bonus, terms.Amount)]), [account], null, false);
+            return PostingResult.Post(new Posting(Guid.CreateVersion7(), PostingKind.BonusGranted, idempotencyKey, reference,
+                [new(promotions, Bucket.Available, -terms.Amount), new(accountId, Bucket.Bonus, terms.Amount)]), [account]);
         });
 
     /// <summary>Turns the bonus balance into cash once the active grant's wagering is met; nothing happens otherwise.</summary>
@@ -77,7 +77,8 @@ public sealed class BonusLedgerHandler(PostingRunner runner, IBonusStore bonuses
     {
         var converting = ending == BonusState.Converted;
         var kind = converting ? PostingKind.BonusConverted : PostingKind.BonusForfeited;
-        return runner.RunAsync($"bonus:{known.GrantId:N}:{(converting ? "convert" : "expire")}", kind, known.AccountId, known.Amount, async transaction =>
+        var key = $"bonus:{known.GrantId:N}:{(converting ? "convert" : "expire")}";
+        return runner.RunAsync(key, kind, known.AccountId, known.Amount, async transaction =>
         {
             var account = await transaction.LockAccountAsync(known.AccountId);
             var grant = await transaction.ActiveGrantAsync(known.AccountId);
@@ -85,14 +86,14 @@ public sealed class BonusLedgerHandler(PostingRunner runner, IBonusStore bonuses
             if (account is null || grant is null || grant.GrantId != known.GrantId || (converting ? !grant.IsMet || grant.ExpiresAt <= now : grant.ExpiresAt > now)
                 || WellKnownAccounts.PromotionsFor(account.Currency) is not { } promotions)
             {
-                return (WalletFailure.InvalidState, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.InvalidState);
             }
 
             grant.Close(ending);
             await transaction.SaveGrantAsync(grant, isNew: false);
             var moved = converting ? account.ConvertBonus() : account.TakeBonus();
-            return (null, new Posting(Guid.CreateVersion7(), kind, $"bonus:{known.GrantId:N}:{(converting ? "convert" : "expire")}", $"bonus {known.GrantId}",
-                [new(account.AccountId, Bucket.Bonus, -moved), converting ? new(account.AccountId, Bucket.Available, moved) : new(promotions, Bucket.Available, moved)]), [account], null, false);
+            return PostingResult.Post(new Posting(Guid.CreateVersion7(), kind, key, $"bonus {known.GrantId}",
+                [new(account.AccountId, Bucket.Bonus, -moved), converting ? new(account.AccountId, Bucket.Available, moved) : new(promotions, Bucket.Available, moved)]), [account]);
         });
     }
 
@@ -105,12 +106,12 @@ public sealed class BonusLedgerHandler(PostingRunner runner, IBonusStore bonuses
             if (account is null || account.Bonus <= 0 || await transaction.ActiveGrantAsync(orphan.AccountId) is not null
                 || WellKnownAccounts.PromotionsFor(account.Currency) is not { } promotions)
             {
-                return (WalletFailure.InvalidState, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.InvalidState);
             }
 
             var moved = account.TakeBonus();
-            return (null, new Posting(Guid.CreateVersion7(), PostingKind.BonusForfeited, key, "bonus returned after its offer ended",
-                [new(account.AccountId, Bucket.Bonus, -moved), new(promotions, Bucket.Available, moved)]), [account], null, false);
+            return PostingResult.Post(new Posting(Guid.CreateVersion7(), PostingKind.BonusForfeited, key, "bonus returned after its offer ended",
+                [new(account.AccountId, Bucket.Bonus, -moved), new(promotions, Bucket.Available, moved)]), [account]);
         });
     }
 }

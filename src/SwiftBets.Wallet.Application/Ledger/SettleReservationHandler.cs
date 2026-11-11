@@ -63,7 +63,7 @@ public sealed class SettleReservationHandler(PostingRunner runner, IWalletStore 
                 ?? (release ? account.ReturnReservation(reservation.Amount, toBonus, toPromotions) : account.ConsumeReservation(reservation.Amount));
             if (failure is not null)
             {
-                return (failure, null, [], null, false);
+                return PostingResult.Refuse(failure.Value);
             }
 
             if (!release && !isWithdrawal)
@@ -106,7 +106,7 @@ public sealed class SettleReservationHandler(PostingRunner runner, IWalletStore 
                 }
             }
 
-            return (null, new Posting(Guid.CreateVersion7(), kind, idempotencyKey, reservation.Reference, entries), [account], reservation, false);
+            return PostingResult.Post(new Posting(Guid.CreateVersion7(), kind, idempotencyKey, reservation.Reference, entries), [account], reservation);
         });
 
         if (outcome.WasApplied && ending == Ending.Capture && bonuses is not null)
