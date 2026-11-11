@@ -10,7 +10,7 @@ using SwiftBets.Wallet.Infrastructure.Persistence;
 
 namespace SwiftBets.Wallet.Infrastructure.Tests;
 
-/// <summary>Cash vouchers (D168): bought from a balance, redeemed once, voided back, guarded against guessing.</summary>
+/// <summary>Cash vouchers: bought from a balance, redeemed once, voided back, guarded against guessing.</summary>
 public sealed class VoucherTests(SqlServerFixture sql)
 {
     private static readonly Guid Buyer = Guid.Parse("10000000-0000-0000-0000-000000000001");

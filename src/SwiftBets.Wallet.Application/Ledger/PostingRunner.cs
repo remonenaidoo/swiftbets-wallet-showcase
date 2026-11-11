@@ -3,10 +3,7 @@ using SwiftBets.Wallet.Domain;
 
 namespace SwiftBets.Wallet.Application.Ledger;
 
-/// <summary>
-/// The one way money moves. The idempotency key's unique index is the arbiter: a request that loses the race rolls back
-/// and replays the winner. Writes ignore cancellation, since stopping between legs would leave money half-moved.
-/// </summary>
+/// <summary>The one way money moves: the idempotency key's unique index decides races, and writes ignore cancellation so money is never half-moved.</summary>
 public sealed class PostingRunner(IWalletStore store, ILimitReachedNotifier limitNotices)
 {
     public async Task<WalletOutcome> RunAsync(string idempotencyKey, PostingKind kind, Guid accountId, long amount, Func<IWalletTransaction, Task<PostingResult>> apply)

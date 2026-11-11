@@ -65,7 +65,7 @@ public sealed class WalletGrpcService(
         return reply;
     }
 
-    /// <summary>Bonus money for a reward (payments' refer-a-friend, D199): from the promotions account, with its wagering terms.</summary>
+    /// <summary>Bonus money for a reward such as refer-a-friend: from the promotions account, with its wagering terms.</summary>
     public override async Task<PostingReply> GrantBonus(GrantBonusRequest request, ServerCallContext context) =>
         WalletReplies.Posting(await bonuses.GrantAsync(Key(request.IdempotencyKey), Id(request.AccountId), request.Amount.Currency, BonusTerms(request, time.GetUtcNow()), request.Reference));
 

@@ -1,9 +1,6 @@
 namespace SwiftBets.Wallet.Domain.Bonus;
 
-/// <summary>
-/// How a stake was paid while an offer was involved: the bonus part, the free bet, and the grant it counted for. Winnings
-/// are split by it later; a free bet's stake is kept back from the first credits up to its amount.
-/// </summary>
+/// <summary>How an offer paid for a stake; later winnings are split by it, and a free bet's stake is kept back from them.</summary>
 public sealed record BonusStake(
     string StakeKey, Guid AccountId, string Reference, StakeProduct Product, int OddsHundredths, long CashAmount, long BonusAmount,
     Guid? GrantId, Guid? FreeBetId, long FreeBetAmount, long FreeBetRetained)

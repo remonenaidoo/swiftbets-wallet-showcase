@@ -10,10 +10,7 @@ using SwiftBets.Wallet.Domain.ResponsibleGambling;
 
 namespace SwiftBets.Wallet.Infrastructure.Messaging;
 
-/// <summary>
-/// Publishes straight to Kafka: the refused transaction has rolled back, so there is nothing to enqueue with. It only
-/// informs the customer, so a failure is logged and the refusal stands either way.
-/// </summary>
+/// <summary>Publishes directly, since the refused transaction rolled back and left nothing to enqueue with; a failure is only logged.</summary>
 public sealed partial class KafkaLimitReachedNotifier(IEventPublisher publisher, TimeProvider time, ILogger<KafkaLimitReachedNotifier> logger) : ILimitReachedNotifier
 {
     public async Task NotifyAsync(LimitHit hit)

@@ -1,4 +1,4 @@
--- Cash (available) and bonus movements of one account per posting, with both balances after each, newest first (D196).
+-- Cash (available) and bonus movements of one account per posting, with both balances after each, newest first.
 -- Balances are read from the entries (stored at post time), never summed over history. Stakes show even when neither
 -- balance moved (a free bet).
 -- The date range becomes this account's Sequence range (IX_LedgerEntries_Account_PostedAt); dates are still checked exactly.

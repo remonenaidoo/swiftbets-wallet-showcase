@@ -6,7 +6,7 @@ using SwiftBets.Wallet.Domain.Bonus;
 
 namespace SwiftBets.Wallet.Api.Endpoints;
 
-/// <summary>The console's promotion builder, award log and audit trail, through the gateway's /api/admin/offers routes (D153, D166).</summary>
+/// <summary>The console's promotion builder, award log and audit trail, under /admin/offers.</summary>
 public static class PromotionEndpoints
 {
     public const string Read = "promotions.read";

@@ -20,11 +20,7 @@ public interface IWalletStore
     /// <summary>Opens an empty punter account; null when the id or the (user, currency) pair is already taken.</summary>
     Task<Account?> OpenAccountAsync(Guid accountId, Guid userId, string currency, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// The account's cash and bonus movements, newest first, before the <paramref name="before"/> sequence and posted from
-    /// <paramref name="from"/> (inclusive) to <paramref name="to"/> (exclusive), only of <paramref name="kinds"/> when given.
-    /// The balances after each are over the whole ledger, stored on the entries when posted (D196).
-    /// </summary>
+    /// <summary>Cash and bonus movements, newest first, before a sequence and within [from, to); the balances after are stored on the entries.</summary>
     Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, IReadOnlyCollection<PostingKind>? kinds, CancellationToken cancellationToken);
 }
 

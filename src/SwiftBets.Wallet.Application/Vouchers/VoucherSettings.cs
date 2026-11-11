@@ -1,9 +1,6 @@
 namespace SwiftBets.Wallet.Application.Vouchers;
 
-/// <summary>
-/// Voucher amounts and the redeem guard. CodeSecret derives every code from its issue key, so a repeated request gets
-/// the same code back and staff can reprint a batch, while the database alone cannot produce a code.
-/// </summary>
+/// <summary>CodeSecret derives every code from its issue key, so retries and reprints get the same code but the database alone cannot.</summary>
 public sealed record VoucherSettings(
     string CodeSecret,
     long MinAmount = 1_000,

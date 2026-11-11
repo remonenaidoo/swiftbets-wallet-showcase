@@ -2,10 +2,7 @@ using SwiftBets.Wallet.Domain;
 
 namespace SwiftBets.Wallet.Application.Statements;
 
-/// <summary>
-/// The bounds of a customer statement (D196): a statement always covers a date range, never all time. With no dates it is
-/// the last 30 days; a range may span at most 12 months, and an immediate CSV download at most 90 days.
-/// </summary>
+/// <summary>A statement is always a bounded range: 30 days by default, at most 12 months, and at most 90 days for an immediate CSV.</summary>
 public static class StatementWindow
 {
     public const int DefaultDays = 30;

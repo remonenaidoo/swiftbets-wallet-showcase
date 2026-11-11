@@ -14,7 +14,7 @@ using SwiftBets.Wallet.Infrastructure.Persistence;
 
 namespace SwiftBets.Wallet.Infrastructure.Tests;
 
-/// <summary>The bonus wallet and promotions (D166): cash first, wagering, free bets, forfeits, expiry and awards.</summary>
+/// <summary>The bonus wallet and promotions: cash first, wagering, free bets, forfeits, expiry and awards.</summary>
 public sealed class BonusWalletTests(SqlServerFixture sql)
 {
     private static readonly Guid Punter = Guid.Parse("10000000-0000-0000-0000-000000000001");

@@ -4,11 +4,7 @@ using SwiftBets.Wallet.Domain.Bonus;
 
 namespace SwiftBets.Wallet.Application.Ledger;
 
-/// <summary>
-/// Bonus money's own postings (D166): a grant from the promotions account, conversion to cash once wagering is met, and
-/// forfeiture to the promotions account at expiry. Each is keyed by the grant, so a retry or a second worker replays it.
-/// A posting's amount is the grant's nominal amount; its entries carry what actually moved.
-/// </summary>
+/// <summary>Bonus postings (grant, conversion, forfeit), each keyed by its grant so a retry or a second worker replays it.</summary>
 public sealed class BonusLedgerHandler(PostingRunner runner, IBonusStore bonuses, TimeProvider time)
 {
     public Task<WalletOutcome> GrantAsync(string idempotencyKey, Guid accountId, string currency, BonusGrantTerms terms, string reference) =>

@@ -3,10 +3,7 @@ namespace SwiftBets.Wallet.Domain.ResponsibleGambling;
 /// <summary>Why money may not move; <c>Limit</c> is the customer's own limit that refused it, when one did.</summary>
 public sealed record SpendRefusal(WalletFailure Failure, string Detail, SpendLimit? Limit = null);
 
-/// <summary>
-/// Judged under the account lock against the period totals (ADR 0006). A stake counts in full against the loss limit,
-/// because it may all be lost; winnings earn the headroom back.
-/// </summary>
+/// <summary>A stake counts in full against the loss limit, since it may all be lost; winnings earn the headroom back.</summary>
 public static class SpendPolicy
 {
     public static SpendRefusal? CheckStake(GamblingRules rules, SpendCounters counters, long amount, DateTimeOffset now)

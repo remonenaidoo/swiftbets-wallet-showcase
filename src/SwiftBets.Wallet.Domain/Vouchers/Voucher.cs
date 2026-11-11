@@ -15,10 +15,7 @@ public enum VoucherSource : byte
     Promotion = 3,
 }
 
-/// <summary>
-/// A single-use cash voucher. Its money sits in the voucher liability account of its currency until it is redeemed
-/// into a punter account or voided back to <see cref="SourceAccountId"/>. <see cref="IssueKey"/> derives the code.
-/// </summary>
+/// <summary>A single-use cash voucher; its money sits in the voucher liability account until redeemed, or voided back to <see cref="SourceAccountId"/>.</summary>
 public sealed record Voucher(
     Guid VoucherId,
     string IssueKey,

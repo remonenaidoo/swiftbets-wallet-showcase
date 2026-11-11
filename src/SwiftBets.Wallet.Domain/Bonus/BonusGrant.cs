@@ -1,10 +1,6 @@
 namespace SwiftBets.Wallet.Domain.Bonus;
 
-/// <summary>
-/// Bonus money given by an offer and what must be staked before it becomes cash: the target is the grant times the
-/// offer's multiplier, and each stake counts at its product's percentage, sports stakes only at or above the minimum odds.
-/// One grant per account is active at a time; the account's bonus balance belongs to it.
-/// </summary>
+/// <summary>Bonus money from an offer and its wagering: stakes count at their product's percentage, sports only at or above the minimum odds.</summary>
 public sealed class BonusGrant(
     Guid grantId, Guid accountId, Guid? promotionId, long amount, long wageringTarget, long wagered, int minOddsHundredths,
     byte sportsPercent, byte casinoPercent, DateTimeOffset expiresAt, BonusState state)

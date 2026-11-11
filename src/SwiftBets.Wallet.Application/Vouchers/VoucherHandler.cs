@@ -17,12 +17,7 @@ public sealed record VoucherOutcome(Voucher? Voucher, string? Code, string? Erro
 /// <summary>A batch staff issued and the codes in it.</summary>
 public sealed record IssuedBatch(VoucherBatch Batch, IReadOnlyList<(Voucher Voucher, string Code)> Vouchers);
 
-/// <summary>
-/// Cash vouchers. Buying moves money from the buyer's balance into the voucher liability account; staff batches move it
-/// from funding (cash taken at a retailer) or the house (a promotion). Redeeming moves it into the redeemer's account and
-/// voiding back where it came from. Each is one posting keyed per voucher, written with the voucher row locked, so a
-/// voucher is spent once however many requests race. Failed redeems are counted per customer and per address and lock out.
-/// </summary>
+/// <summary>Each voucher movement is one posting keyed per voucher, written under the voucher row lock, so a voucher is spent once.</summary>
 public sealed class VoucherHandler(
     PostingRunner runner, IWalletStore wallet, IVoucherStore vouchers, AccountsHandler accounts, IGamblingRules rules, VoucherCodes codes,
     VoucherSettings settings, IVoucherGiftNotifier gifts, TimeProvider time)

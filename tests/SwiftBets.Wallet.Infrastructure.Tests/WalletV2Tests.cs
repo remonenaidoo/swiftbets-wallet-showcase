@@ -10,7 +10,7 @@ using SwiftBets.Wallet.Infrastructure.Persistence;
 
 namespace SwiftBets.Wallet.Infrastructure.Tests;
 
-/// <summary>Currency accounts, deposits, withdrawals and the statement (E3).</summary>
+/// <summary>Currency accounts, deposits, withdrawals and the statement.</summary>
 public sealed class WalletV2Tests(SqlServerFixture sql)
 {
     private static readonly Guid Punter = Guid.Parse("10000000-0000-0000-0000-000000000001");

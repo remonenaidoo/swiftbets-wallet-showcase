@@ -4,12 +4,7 @@ using SwiftBets.Wallet.Domain.Bonus;
 
 namespace SwiftBets.Wallet.Application.Promotions;
 
-/// <summary>
-/// Turns domain events into awards (D166): a successful deposit earns running deposit matches, and the settlement of a
-/// customer's first bet earns running first-bet free bets. Each customer gets an offer at most once; the bonus posting is
-/// keyed by offer and customer and the award row is unique, so a redelivered event awards nothing more. Every decision,
-/// including a refusal, is recorded for the console.
-/// </summary>
+/// <summary>Deposits and first-bet settlements earn awards at most once per customer and offer; refusals are recorded too.</summary>
 public sealed class AwardHandler(IPromotionStore store, OfferEligibility eligibility, AccountsHandler accounts, BonusLedgerHandler ledger)
 {
     public async Task OnDepositAsync(Guid paymentId, Guid userId, long amount, string currency, DateTimeOffset at, CancellationToken cancellationToken)
