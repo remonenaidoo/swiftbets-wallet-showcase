@@ -97,7 +97,7 @@ public sealed class VoucherTests(SqlServerFixture sql)
         var factory = new SqlServerConnectionFactory(connectionString);
         var store = new SqlWalletStore(factory, _time);
         var settings = new VoucherSettings("test-secret");
-        var handler = new VoucherHandler(new PostingRunner(store), store, new SqlVoucherStore(factory), new AccountsHandler(store), FixedRules.None,
+        var handler = new VoucherHandler(TestLedger.Runner(store), store, new SqlVoucherStore(factory), new AccountsHandler(store), FixedRules.None,
             new VoucherCodes(settings), settings, new NoGifts(), _time);
         return (handler, store, connectionString);
     }

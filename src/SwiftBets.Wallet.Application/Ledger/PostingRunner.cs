@@ -7,7 +7,7 @@ namespace SwiftBets.Wallet.Application.Ledger;
 /// The one way money moves. The idempotency key's unique index is the arbiter: a request that loses the race rolls back
 /// and replays the winner. Writes ignore cancellation, since stopping between legs would leave money half-moved.
 /// </summary>
-public sealed class PostingRunner(IWalletStore store, ILimitReachedNotifier? limits = null)
+public sealed class PostingRunner(IWalletStore store, ILimitReachedNotifier limitNotices)
 {
     public async Task<WalletOutcome> RunAsync(string idempotencyKey, PostingKind kind, Guid accountId, long amount, Func<IWalletTransaction, Task<PostingResult>> apply)
     {
@@ -21,9 +21,9 @@ public sealed class PostingRunner(IWalletStore store, ILimitReachedNotifier? lim
             attempt = await AttemptAsync(idempotencyKey, kind, accountId, amount, apply);
         }
 
-        if (attempt.Limit is { } hit && limits is not null)
+        if (attempt.Limit is { } hit)
         {
-            await limits.NotifyAsync(hit);
+            await limitNotices.NotifyAsync(hit);
         }
 
         return attempt.Outcome;

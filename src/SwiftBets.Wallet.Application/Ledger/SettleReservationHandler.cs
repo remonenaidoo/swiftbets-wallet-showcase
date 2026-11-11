@@ -9,7 +9,7 @@ namespace SwiftBets.Wallet.Application.Ledger;
 /// either can be released back to the punter. Capturing a withdrawal as a stake (or the reverse) is refused. A captured
 /// stake counts towards the active bonus's wagering; a released one goes back the way it was paid (D166).
 /// </summary>
-public sealed class SettleReservationHandler(PostingRunner runner, IWalletStore store, BonusLedgerHandler? bonuses = null)
+public sealed class SettleReservationHandler(PostingRunner runner, IWalletStore store, BonusLedgerHandler bonuses)
 {
     public Task<WalletOutcome> CaptureAsync(string idempotencyKey, Guid reservationId, CancellationToken cancellationToken) =>
         RunAsync(idempotencyKey, reservationId, Ending.Capture, cancellationToken);
@@ -109,7 +109,7 @@ public sealed class SettleReservationHandler(PostingRunner runner, IWalletStore 
             return PostingResult.Post(new Posting(Guid.CreateVersion7(), kind, idempotencyKey, reservation.Reference, entries), [account], reservation);
         });
 
-        if (outcome.WasApplied && ending == Ending.Capture && bonuses is not null)
+        if (outcome.WasApplied && ending == Ending.Capture)
         {
             await bonuses.ConvertIfMetAsync(known.AccountId);
         }

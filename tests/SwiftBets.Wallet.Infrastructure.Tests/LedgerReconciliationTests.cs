@@ -2,7 +2,6 @@ using Dapper;
 using Microsoft.Data.SqlClient;
 using SwiftBets.BuildingBlocks.Persistence;
 using SwiftBets.BuildingBlocks.Testing;
-using SwiftBets.Wallet.Application.Ledger;
 using SwiftBets.Wallet.Application.Reconciliation;
 using SwiftBets.Wallet.Domain;
 using SwiftBets.Wallet.Infrastructure.Persistence;
@@ -63,7 +62,7 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     public async Task Reservation_released_without_returning_the_funds_is_reported()
     {
         var wallet = await WalletAsync();
-        var reservation = (await new ReserveFundsHandler(new PostingRunner(wallet.Store), FixedRules.None, TimeProvider.System).HandleAsync("held_reserve", Punter, 1_500, "ZAR", "held")).Reservation!;
+        var reservation = (await TestLedger.Reserve(wallet.ConnectionString, FixedRules.None, TimeProvider.System).HandleAsync("held_reserve", Punter, 1_500, "ZAR", "held")).Reservation!;
         await wallet.ExecuteAsync("UPDATE wallet.Reservations SET State = 3 WHERE ReservationId = @Id", new { Id = reservation.ReservationId });
 
         var report = await wallet.Handler.HandleAsync(CancellationToken.None);
@@ -76,7 +75,7 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     public async Task Postings_committed_while_reconciling_never_show_as_drift()
     {
         var wallet = await WalletAsync();
-        var transfers = new TransferHandler(new PostingRunner(wallet.Store), FixedRules.None, TimeProvider.System);
+        var transfers = TestLedger.Transfer(wallet.ConnectionString, FixedRules.None, TimeProvider.System);
         var writes = Task.WhenAll(Enumerable.Range(0, 40).Select(i => transfers.CreditAsync($"race_{i}", Punter, 100, "ZAR", "race")));
 
         var reports = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => wallet.Handler.HandleAsync(CancellationToken.None)));
@@ -89,7 +88,7 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     public async Task Day_totals_split_casino_and_racing_money_from_sportsbook_money_by_their_keys()
     {
         var wallet = await WalletAsync();
-        var transfers = new TransferHandler(new PostingRunner(wallet.Store), FixedRules.None, TimeProvider.System);
+        var transfers = TestLedger.Transfer(wallet.ConnectionString, FixedRules.None, TimeProvider.System);
         await transfers.CreditAsync("casino:sim-seamless:w-1", Punter, 700, "ZAR", "casino win");
         await transfers.CreditAsync("racing:payout:r-1", Punter, 1_300, "ZAR", "racing win");
         await transfers.CreditAsync("payout_c1_v1", Punter, 2_500, "ZAR", "payout");
@@ -103,7 +102,7 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     public async Task Day_totals_count_lotto_stakes_and_returns_net_of_clawbacks()
     {
         var wallet = await WalletAsync();
-        var transfers = new TransferHandler(new PostingRunner(wallet.Store), FixedRules.None, TimeProvider.System);
+        var transfers = TestLedger.Transfer(wallet.ConnectionString, FixedRules.None, TimeProvider.System);
         await transfers.CreditAsync("lotto:win:b-1:1", Punter, 900, "ZAR", "lotto win");
         await transfers.DebitAsync("lotto:bet:b-2", Punter, 300, "ZAR", "lotto bet");
         await transfers.DebitAsync("lotto:clawback:b-1:2", Punter, 400, "ZAR", "lotto override");
@@ -117,7 +116,7 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     public async Task Lotto_money_is_not_counted_as_sportsbook_money()
     {
         var wallet = await WalletAsync();
-        await new TransferHandler(new PostingRunner(wallet.Store), FixedRules.None, TimeProvider.System).CreditAsync("lotto:win:b-3:1", Punter, 900, "ZAR", "lotto win");
+        await TestLedger.Transfer(wallet.ConnectionString, FixedRules.None, TimeProvider.System).CreditAsync("lotto:win:b-3:1", Punter, 900, "ZAR", "lotto win");
 
         (await wallet.Reconciliation.DayTotalsAsync(DateOnly.FromDateTime(DateTime.UtcNow), CancellationToken.None)).SportsCredits.ShouldBe(0);
     }
@@ -126,7 +125,7 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     public async Task Another_day_counts_none_of_today()
     {
         var wallet = await WalletAsync();
-        await new TransferHandler(new PostingRunner(wallet.Store), FixedRules.None, TimeProvider.System).CreditAsync("payout_c2_v1", Punter, 2_500, "ZAR", "payout");
+        await TestLedger.Transfer(wallet.ConnectionString, FixedRules.None, TimeProvider.System).CreditAsync("payout_c2_v1", Punter, 2_500, "ZAR", "payout");
 
         (await wallet.Reconciliation.DayTotalsAsync(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), CancellationToken.None)).SportsCredits.ShouldBe(0);
     }
@@ -147,11 +146,11 @@ public sealed class LedgerReconciliationTests(SqlServerFixture sql)
     {
         public async Task ActivityAsync()
         {
-            var runner = new PostingRunner(Store);
-            var reservation = (await new ReserveFundsHandler(runner, FixedRules.None, TimeProvider.System).HandleAsync("a_reserve", Punter, 2_000, "ZAR", "a")).Reservation!;
-            await new SettleReservationHandler(runner, Store).CaptureAsync("a_capture", reservation.ReservationId, CancellationToken.None);
-            await new TransferHandler(runner, FixedRules.None, TimeProvider.System).CreditAsync("a_win", Punter, 5_000, "ZAR", "a");
-            await new TransferHandler(runner, FixedRules.None, TimeProvider.System).DebitAsync("a_clawback", Punter, 1_000, "ZAR", "a");
+            var reservation = (await TestLedger.Reserve(ConnectionString, FixedRules.None, TimeProvider.System).HandleAsync("a_reserve", Punter, 2_000, "ZAR", "a")).Reservation!;
+            await TestLedger.Settle(ConnectionString, TimeProvider.System).CaptureAsync("a_capture", reservation.ReservationId, CancellationToken.None);
+            var transfers = TestLedger.Transfer(ConnectionString, FixedRules.None, TimeProvider.System);
+            await transfers.CreditAsync("a_win", Punter, 5_000, "ZAR", "a");
+            await transfers.DebitAsync("a_clawback", Punter, 1_000, "ZAR", "a");
         }
 
         public async Task ExecuteAsync(string statement, object? parameters = null)

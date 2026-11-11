@@ -2,7 +2,6 @@ using Dapper;
 using Microsoft.Data.SqlClient;
 using SwiftBets.BuildingBlocks.Persistence;
 using SwiftBets.BuildingBlocks.Testing;
-using SwiftBets.Wallet.Application.Ledger;
 using SwiftBets.Wallet.Domain;
 using SwiftBets.Wallet.Infrastructure.Persistence;
 
@@ -20,7 +19,7 @@ public sealed class WalletLedgerTests(SqlServerFixture sql)
         var (store, connectionString) = await WalletAsync();
 
         var outcomes = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ =>
-            new ReserveFundsHandler(new PostingRunner(store), FixedRules.None, TimeProvider.System).HandleAsync("coupon-1_reserve", Punter, 2_500, "ZAR", "coupon-1")));
+            TestLedger.Reserve(connectionString, FixedRules.None, TimeProvider.System).HandleAsync("coupon-1_reserve", Punter, 2_500, "ZAR", "coupon-1")));
 
         outcomes.Count(o => o.WasApplied).ShouldBe(1);
         outcomes.ShouldAllBe(o => o.Failure == null && o.Reservation!.ReservationId == outcomes[0].Reservation!.ReservationId);
@@ -33,8 +32,8 @@ public sealed class WalletLedgerTests(SqlServerFixture sql)
     public async Task Releasing_a_captured_reservation_is_refused()
     {
         var (store, connectionString) = await WalletAsync();
-        var reservation = (await new ReserveFundsHandler(new PostingRunner(store), FixedRules.None, TimeProvider.System).HandleAsync("c2_reserve", Punter, 1_000, "ZAR", "c2")).Reservation!;
-        var settle = new SettleReservationHandler(new PostingRunner(store), store);
+        var reservation = (await TestLedger.Reserve(connectionString, FixedRules.None, TimeProvider.System).HandleAsync("c2_reserve", Punter, 1_000, "ZAR", "c2")).Reservation!;
+        var settle = TestLedger.Settle(connectionString, TimeProvider.System);
         (await settle.CaptureAsync("c2_capture", reservation.ReservationId, CancellationToken.None)).WasApplied.ShouldBeTrue();
 
         (await settle.ReleaseAsync("c2_release", reservation.ReservationId, CancellationToken.None)).Failure.ShouldBe(WalletFailure.InvalidState);
@@ -49,7 +48,7 @@ public sealed class WalletLedgerTests(SqlServerFixture sql)
         var (store, connectionString) = await WalletAsync();
         var newcomer = Guid.NewGuid();
 
-        var outcome = await new TransferHandler(new PostingRunner(store), FixedRules.None, TimeProvider.System).TopUpAsync("topup-1", newcomer, 5_000, "ZAR", "welcome");
+        var outcome = await TestLedger.Transfer(connectionString, FixedRules.None, TimeProvider.System).TopUpAsync("topup-1", newcomer, 5_000, "ZAR", "welcome");
 
         outcome.WasApplied.ShouldBeTrue();
         (await store.GetAccountAsync(newcomer, CancellationToken.None))!.Available.ShouldBe(5_000);
@@ -59,9 +58,9 @@ public sealed class WalletLedgerTests(SqlServerFixture sql)
     [Fact]
     public async Task Credit_to_an_unknown_account_is_refused()
     {
-        var (store, _) = await WalletAsync();
+        var (store, connectionString) = await WalletAsync();
 
-        var outcome = await new TransferHandler(new PostingRunner(store), FixedRules.None, TimeProvider.System).CreditAsync("win-1", Guid.NewGuid(), 5_000, "ZAR", "coupon");
+        var outcome = await TestLedger.Transfer(connectionString, FixedRules.None, TimeProvider.System).CreditAsync("win-1", Guid.NewGuid(), 5_000, "ZAR", "coupon");
 
         outcome.Failure.ShouldBe(WalletFailure.AccountNotFound);
     }
@@ -69,20 +68,20 @@ public sealed class WalletLedgerTests(SqlServerFixture sql)
     [Fact]
     public async Task Blacklisted_punter_receives_no_credit()
     {
-        var (store, _) = await WalletAsync();
+        var (store, connectionString) = await WalletAsync();
         await store.SetBlacklistedAsync(Punter, true, CancellationToken.None);
 
-        (await new TransferHandler(new PostingRunner(store), FixedRules.None, TimeProvider.System).CreditAsync("win-2", Punter, 5_000, "ZAR", "coupon")).Failure.ShouldBe(WalletFailure.AccountBlacklisted);
+        (await TestLedger.Transfer(connectionString, FixedRules.None, TimeProvider.System).CreditAsync("win-2", Punter, 5_000, "ZAR", "coupon")).Failure.ShouldBe(WalletFailure.AccountBlacklisted);
     }
 
     [Fact]
     public async Task Lifting_the_blacklist_lets_the_credit_through()
     {
-        var (store, _) = await WalletAsync();
+        var (store, connectionString) = await WalletAsync();
         await store.SetBlacklistedAsync(Punter, true, CancellationToken.None);
         await store.SetBlacklistedAsync(Punter, false, CancellationToken.None);
 
-        (await new TransferHandler(new PostingRunner(store), FixedRules.None, TimeProvider.System).CreditAsync("win-3", Punter, 5_000, "ZAR", "coupon")).WasApplied.ShouldBeTrue();
+        (await TestLedger.Transfer(connectionString, FixedRules.None, TimeProvider.System).CreditAsync("win-3", Punter, 5_000, "ZAR", "coupon")).WasApplied.ShouldBeTrue();
     }
 
     private async Task<(SqlWalletStore Store, string ConnectionString)> WalletAsync()
