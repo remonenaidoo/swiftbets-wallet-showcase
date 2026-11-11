@@ -6,7 +6,7 @@ using SwiftBets.Wallet.Domain.ResponsibleGambling;
 namespace SwiftBets.Wallet.Application.Ledger;
 
 /// <summary>Credits, deposits, top-ups and debits between a punter account and the house or funding account of its currency.</summary>
-public sealed class TransferHandler(PostingRunner runner, IGamblingRules rules, TimeProvider time, BonusLedgerHandler? bonuses = null)
+public sealed class TransferHandler(PostingRunner runner, IGamblingRules rules, TimeProvider time, BonusLedgerHandler bonuses)
 {
     /// <summary>Only casino stake debits carry this reason, and only they may be paid with bonus money.</summary>
     public const string CasinoBetReason = "casino-bet";
@@ -29,7 +29,7 @@ public sealed class TransferHandler(PostingRunner runner, IGamblingRules rules, 
         }
 
         var outcome = await CasinoStakeAsync(idempotencyKey, accountId, amount, currency, reference);
-        if (outcome.WasApplied && bonuses is not null)
+        if (outcome.WasApplied)
         {
             await bonuses.ConvertIfMetAsync(accountId);
         }

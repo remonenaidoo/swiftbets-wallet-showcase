@@ -19,7 +19,7 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     [Fact]
     public async Task A_customer_gets_one_account_per_currency_and_the_first_keeps_the_user_id()
     {
-        var (store, _) = await WalletAsync();
+        var (store, connectionString) = await WalletAsync();
         var accounts = new AccountsHandler(store);
         var newcomer = Guid.NewGuid();
 
@@ -38,7 +38,7 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     [Fact]
     public async Task A_customer_who_never_deposited_has_a_zero_rand_balance_not_a_missing_wallet()
     {
-        var (store, _) = await WalletAsync();
+        var (store, connectionString) = await WalletAsync();
         var newcomer = Guid.NewGuid();
 
         var balance = await new AccountsHandler(store).BalanceAsync(newcomer, CancellationToken.None);
@@ -54,11 +54,11 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     [Fact]
     public async Task An_opened_account_reports_its_real_balance_not_the_zero_default()
     {
-        var (store, _) = await WalletAsync();
+        var (store, connectionString) = await WalletAsync();
         var customer = Guid.NewGuid();
         var accounts = new AccountsHandler(store);
         var usd = (await accounts.OpenAsync(customer, "USD", CancellationToken.None)).Account!;
-        var transfer = new TransferHandler(new PostingRunner(store), new FixedRules(new GamblingRules([], [])), _time);
+        var transfer = TestLedger.Transfer(connectionString, new FixedRules(new GamblingRules([], [])), _time);
         (await transfer.DepositAsync("deposit_balance", usd.AccountId, 2_500, "USD", "pay_balance")).WasApplied.ShouldBeTrue();
 
         var balance = await accounts.BalanceAsync(customer, CancellationToken.None);
@@ -70,7 +70,7 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     [Fact]
     public async Task Concurrent_first_opens_end_with_one_account_per_currency()
     {
-        var (store, _) = await WalletAsync();
+        var (store, connectionString) = await WalletAsync();
         var newcomer = Guid.NewGuid();
 
         var opened = await Task.WhenAll(Enumerable.Range(0, 10).Select(i => new AccountsHandler(store).OpenAsync(newcomer, i % 2 == 0 ? "ZAR" : "USD", CancellationToken.None)));
@@ -87,7 +87,7 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
         var (store, connectionString) = await WalletAsync();
         var usd = (await new AccountsHandler(store).OpenAsync(Punter, "USD", CancellationToken.None)).Account!;
         var rules = new FixedRules(new GamblingRules([new SpendLimit(SpendKind.Deposit, SpendPeriod.Day, 1_000, null, null, "ZAR")], []));
-        var transfer = new TransferHandler(new PostingRunner(store), rules, _time);
+        var transfer = TestLedger.Transfer(connectionString, rules, _time);
 
         var deposit = await transfer.DepositAsync("deposit_1", usd.AccountId, 50_000, "USD", "pay_1");
 
@@ -101,9 +101,9 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     [Fact]
     public async Task A_deposit_into_an_account_that_was_never_opened_is_refused()
     {
-        var (store, _) = await WalletAsync();
+        var (store, connectionString) = await WalletAsync();
 
-        (await new TransferHandler(new PostingRunner(store), FixedRules.None, _time).DepositAsync("deposit_x", Guid.NewGuid(), 1_000, "ZAR", "pay_x"))
+        (await TestLedger.Transfer(connectionString, FixedRules.None, _time).DepositAsync("deposit_x", Guid.NewGuid(), 1_000, "ZAR", "pay_x"))
             .Failure.ShouldBe(WalletFailure.AccountNotFound);
     }
 
@@ -112,8 +112,8 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     {
         var (store, connectionString) = await WalletAsync();
         var rules = new FixedRules(new GamblingRules([new SpendLimit(SpendKind.Stake, SpendPeriod.Day, 1_000, null, null)], []));
-        var hold = await new ReserveFundsHandler(new PostingRunner(store), rules, _time).HoldWithdrawalAsync("wd_1_hold", Punter, 30_000, "ZAR", "wd_1");
-        var settle = new SettleReservationHandler(new PostingRunner(store), store);
+        var hold = await TestLedger.Reserve(connectionString, rules, _time).HoldWithdrawalAsync("wd_1_hold", Punter, 30_000, "ZAR", "wd_1");
+        var settle = TestLedger.Settle(connectionString, _time);
 
         hold.WasApplied.ShouldBeTrue();
         hold.Reservation!.Purpose.ShouldBe(ReservationPurpose.Withdrawal);
@@ -131,13 +131,13 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     [Fact]
     public async Task A_withdrawal_block_stops_a_withdrawal_but_an_exclusion_does_not()
     {
-        var (store, _) = await WalletAsync();
+        var (store, connectionString) = await WalletAsync();
         var since = _time.GetUtcNow().AddDays(-1);
         var blocked = new FixedRules(new GamblingRules([], [new SpendBlock(BlockKind.NoWithdrawals, since, null)]));
         var excluded = new FixedRules(new GamblingRules([], [new SpendBlock(BlockKind.Exclusion, since, null)]));
 
-        var refused = await new ReserveFundsHandler(new PostingRunner(store), blocked, _time).HoldWithdrawalAsync("wd_2_hold", Punter, 1_000, "ZAR", "wd_2");
-        var allowed = await new ReserveFundsHandler(new PostingRunner(store), excluded, _time).HoldWithdrawalAsync("wd_3_hold", Punter, 1_000, "ZAR", "wd_3");
+        var refused = await TestLedger.Reserve(connectionString, blocked, _time).HoldWithdrawalAsync("wd_2_hold", Punter, 1_000, "ZAR", "wd_2");
+        var allowed = await TestLedger.Reserve(connectionString, excluded, _time).HoldWithdrawalAsync("wd_3_hold", Punter, 1_000, "ZAR", "wd_3");
 
         refused.Failure.ShouldBe(WalletFailure.AccountRestricted);
         allowed.WasApplied.ShouldBeTrue();
@@ -147,8 +147,8 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     public async Task A_returned_withdrawal_goes_back_to_available_and_a_stake_cannot_be_paid_out()
     {
         var (store, connectionString) = await WalletAsync();
-        var reserve = new ReserveFundsHandler(new PostingRunner(store), FixedRules.None, _time);
-        var settle = new SettleReservationHandler(new PostingRunner(store), store);
+        var reserve = TestLedger.Reserve(connectionString, FixedRules.None, _time);
+        var settle = TestLedger.Settle(connectionString, _time);
         var withdrawal = (await reserve.HoldWithdrawalAsync("wd_4_hold", Punter, 5_000, "ZAR", "wd_4")).Reservation!;
         var stake = (await reserve.HandleAsync("c9_reserve", Punter, 1_000, "ZAR", "c9")).Reservation!;
 
@@ -164,9 +164,9 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     [Fact]
     public async Task Statement_lists_available_movements_newest_first_with_the_running_balance_and_pages()
     {
-        var (store, _) = await WalletAsync();
-        var transfer = new TransferHandler(new PostingRunner(store), FixedRules.None, _time);
-        var reserve = new ReserveFundsHandler(new PostingRunner(store), FixedRules.None, _time);
+        var (store, connectionString) = await WalletAsync();
+        var transfer = TestLedger.Transfer(connectionString, FixedRules.None, _time);
+        var reserve = TestLedger.Reserve(connectionString, FixedRules.None, _time);
         await transfer.DepositAsync("deposit_s1", Punter, 5_000, "ZAR", "pay_s1");
         await reserve.HandleAsync("cs_reserve", Punter, 2_000, "ZAR", "cs");
         await reserve.HoldWithdrawalAsync("wds_hold", Punter, 1_000, "ZAR", "wds");
@@ -182,8 +182,8 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     [Fact]
     public async Task A_date_range_keeps_only_movements_inside_it_with_the_running_balance_intact()
     {
-        var (store, _) = await WalletAsync();
-        var transfer = new TransferHandler(new PostingRunner(store), FixedRules.None, _time);
+        var (store, connectionString) = await WalletAsync();
+        var transfer = TestLedger.Transfer(connectionString, FixedRules.None, _time);
         await transfer.DepositAsync("deposit_r1", Punter, 5_000, "ZAR", "pay_r1");
         var now = _time.GetUtcNow();
 
@@ -198,8 +198,8 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     public async Task Stored_balances_after_match_the_running_sums_when_posted_and_after_the_backfill()
     {
         var (store, connectionString) = await WalletAsync();
-        var transfer = new TransferHandler(new PostingRunner(store), FixedRules.None, _time);
-        var reserve = new ReserveFundsHandler(new PostingRunner(store), FixedRules.None, _time);
+        var transfer = TestLedger.Transfer(connectionString, FixedRules.None, _time);
+        var reserve = TestLedger.Reserve(connectionString, FixedRules.None, _time);
         await transfer.DepositAsync("deposit_b1", Punter, 5_000, "ZAR", "pay_b1");
         await reserve.HandleAsync("b_reserve", Punter, 2_000, "ZAR", "b");
         await reserve.HoldWithdrawalAsync("wdb_hold", Punter, 1_000, "ZAR", "wdb");
@@ -226,7 +226,7 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     public async Task An_entry_for_an_account_the_posting_did_not_load_is_still_written_with_no_balance()
     {
         var (store, connectionString) = await WalletAsync();
-        await new TransferHandler(new PostingRunner(store), FixedRules.None, _time).DepositAsync("deposit_h1", Punter, 5_000, "ZAR", "pay_h1");
+        await TestLedger.Transfer(connectionString, FixedRules.None, _time).DepositAsync("deposit_h1", Punter, 5_000, "ZAR", "pay_h1");
         await using var connection = new SqlConnection(connectionString);
 
         var entries = (await connection.QueryAsync<(Guid AccountId, long? Sequence, long? AvailableAfter)>("""
@@ -243,9 +243,9 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
     [Fact]
     public async Task A_type_filter_keeps_only_its_kinds_and_pages_past_the_first_page()
     {
-        var (store, _) = await WalletAsync();
-        var transfer = new TransferHandler(new PostingRunner(store), FixedRules.None, _time);
-        var reserve = new ReserveFundsHandler(new PostingRunner(store), FixedRules.None, _time);
+        var (store, connectionString) = await WalletAsync();
+        var transfer = TestLedger.Transfer(connectionString, FixedRules.None, _time);
+        var reserve = TestLedger.Reserve(connectionString, FixedRules.None, _time);
         await transfer.DepositAsync("deposit_t1", Punter, 1_000, "ZAR", "pay_t1");
         await reserve.HandleAsync("t_reserve", Punter, 500, "ZAR", "t");
         await transfer.DepositAsync("deposit_t2", Punter, 2_000, "ZAR", "pay_t2");

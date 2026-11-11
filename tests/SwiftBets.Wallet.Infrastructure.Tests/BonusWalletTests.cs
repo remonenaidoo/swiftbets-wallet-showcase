@@ -277,12 +277,11 @@ public sealed class BonusWalletTests(SqlServerFixture sql)
         var connections = new SqlServerConnectionFactory(connectionString);
         var store = new SqlWalletStore(connections, _time);
         var bonuses = new SqlBonusStore(connections);
-        var ledger = new BonusLedgerHandler(new PostingRunner(store), bonuses, _time);
         return new Wallet(connectionString, store, bonuses, new SqlPromotionStore(connections, _time), new SqlReconciliationStore(connections),
-            new ReserveFundsHandler(new PostingRunner(store), FixedRules.None, _time),
-            new SettleReservationHandler(new PostingRunner(store), store, ledger),
-            new TransferHandler(new PostingRunner(store), FixedRules.None, _time, ledger),
-            ledger);
+            TestLedger.Reserve(connectionString, FixedRules.None, _time),
+            TestLedger.Settle(connectionString, _time),
+            TestLedger.Transfer(connectionString, FixedRules.None, _time),
+            TestLedger.BonusLedger(connectionString, _time));
     }
 
     private AwardHandler Awards(Wallet w, IGamblingRules rules) =>
