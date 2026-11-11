@@ -14,42 +14,31 @@ public static class CustomerEndpoints
 {
     public const int MaxStatementLines = 100;
 
+    /// <summary>A download holds at most this many lines; a narrower range gets the rest.</summary>
+    public const int MaxCsvLines = 10_000;
+
+    private const int CsvPageSize = 1_000;
+
     public static IEndpointRouteBuilder MapCustomerWallet(this IEndpointRouteBuilder endpoints)
     {
         var me = endpoints.MapGroup("/me/wallet").RequireAuthorization();
 
         me.MapGet("/accounts", async (ClaimsPrincipal user, HttpContext context, AccountsHandler accounts) =>
-            UserId(user) is { } userId
+            user.CustomerId() is { } userId
                 ? Results.Ok((await accounts.ListAsync(userId, context.RequestAborted)).Select(View))
-                : Unauthenticated(context));
+                : Results.Unauthorized());
 
-        // A statement is always a date range (D196): the last 30 days by default, at most 12 months, filtered by type in the wallet.
         me.MapGet("/statement", async (string? currency, long? before, int? limit, DateTimeOffset? from, DateTimeOffset? to, string? type, ClaimsPrincipal user, HttpContext context, AccountsHandler accounts, IWalletStore store, TimeProvider time) =>
         {
-            if (UserId(user) is not { } userId)
+            var request = await ResolveStatementAsync(currency, from, to, type, user, context, accounts, time, csv: false);
+            if (request.Refusal is { } refusal)
             {
-                return Unauthenticated(context);
+                return refusal;
             }
 
-            var window = StatementWindow.Resolve(from, to, time.GetUtcNow());
-            if (window.Problem is { } problem)
-            {
-                return Error.Validation("invalid_range", problem).ToHttpResult(context);
-            }
-
-            if (!StatementWindow.TryKinds(type, out var kinds))
-            {
-                return Error.Validation("invalid_type", $"type must be one of {string.Join(", ", StatementWindow.Types.Keys)}.").ToHttpResult(context);
-            }
-
-            var account = (await accounts.ListAsync(userId, context.RequestAborted)).FirstOrDefault(a => currency is null || a.Currency == currency);
-            if (account is null)
-            {
-                return Error.NotFound("account_not_found", "You have no account in that currency.").ToHttpResult(context);
-            }
-
+            var (account, window, kinds, _) = request;
             var size = Math.Clamp(limit ?? 50, 1, MaxStatementLines);
-            var lines = await store.StatementAsync(account.AccountId, before, size, window.From, window.To, context.RequestAborted, kinds);
+            var lines = await store.StatementAsync(account!.AccountId, before, size, window.From, window.To, kinds, context.RequestAborted);
             return Results.Ok(new
             {
                 account = View(account),
@@ -60,44 +49,23 @@ public static class CustomerEndpoints
             });
         });
 
-        // The range as a download, built here so every line comes straight from the ledger. Immediate only up to 90 days and
-        // 10 000 lines; longer exports wait for object storage (D196).
+        // Built here so every line comes straight from the ledger; longer ranges wait for an export to object storage.
         me.MapGet("/statement.csv", async (string? currency, DateTimeOffset? from, DateTimeOffset? to, string? type, ClaimsPrincipal user, HttpContext context, AccountsHandler accounts, IWalletStore store, TimeProvider time) =>
         {
-            if (UserId(user) is not { } userId)
+            var request = await ResolveStatementAsync(currency, from, to, type, user, context, accounts, time, csv: true);
+            if (request.Refusal is { } refusal)
             {
-                return Unauthenticated(context);
+                return refusal;
             }
 
-            var window = StatementWindow.Resolve(from, to, time.GetUtcNow());
-            if (window.Problem is { } problem)
-            {
-                return Error.Validation("invalid_range", problem).ToHttpResult(context);
-            }
-
-            if (!StatementWindow.FitsImmediateCsv(window.From, window.To))
-            {
-                return Error.Validation("export_range_too_long", $"Exports over {StatementWindow.MaxCsvDays} days are coming soon. Pick {StatementWindow.MaxCsvDays} days or fewer.").ToHttpResult(context);
-            }
-
-            if (!StatementWindow.TryKinds(type, out var kinds))
-            {
-                return Error.Validation("invalid_type", $"type must be one of {string.Join(", ", StatementWindow.Types.Keys)}.").ToHttpResult(context);
-            }
-
-            var account = (await accounts.ListAsync(userId, context.RequestAborted)).FirstOrDefault(a => currency is null || a.Currency == currency);
-            if (account is null)
-            {
-                return Error.NotFound("account_not_found", "You have no account in that currency.").ToHttpResult(context);
-            }
-
+            var (account, window, kinds, _) = request;
             var lines = new List<StatementLine>();
             long? before = null;
             while (lines.Count < MaxCsvLines)
             {
-                var page = await store.StatementAsync(account.AccountId, before, 1_000, window.From, window.To, context.RequestAborted, kinds);
+                var page = await store.StatementAsync(account!.AccountId, before, CsvPageSize, window.From, window.To, kinds, context.RequestAborted);
                 lines.AddRange(page);
-                if (page.Count < 1_000)
+                if (page.Count < CsvPageSize)
                 {
                     break;
                 }
@@ -105,17 +73,17 @@ public static class CustomerEndpoints
                 before = page[^1].Sequence;
             }
 
-            var name = $"swiftbets-statement-{account.Currency}-{window.From.UtcDateTime:yyyy-MM-dd}-to-{window.To.UtcDateTime:yyyy-MM-dd}.csv";
+            var name = $"swiftbets-statement-{account!.Currency}-{window.From.UtcDateTime:yyyy-MM-dd}-to-{window.To.UtcDateTime:yyyy-MM-dd}.csv";
             context.Response.Headers.CacheControl = "no-store";
             return Results.File(System.Text.Encoding.UTF8.GetBytes(StatementCsv.Write(lines.Take(MaxCsvLines), account.Currency, Describe)), "text/csv; charset=utf-8", name);
         });
 
-        // The active bonus, its wagering and the free bets; forfeitOnWithdrawal is what a withdrawal request would forfeit.
+        // forfeitOnWithdrawal is what a withdrawal request would forfeit.
         me.MapGet("/bonuses", async (string? currency, ClaimsPrincipal user, HttpContext context, AccountsHandler accounts, IBonusStore bonuses, IPromotionStore promotions, TimeProvider time) =>
         {
-            if (UserId(user) is not { } userId)
+            if (user.CustomerId() is not { } userId)
             {
-                return Unauthenticated(context);
+                return Results.Unauthorized();
             }
 
             var account = (await accounts.ListAsync(userId, context.RequestAborted)).FirstOrDefault(a => currency is null || a.Currency == currency);
@@ -144,9 +112,9 @@ public static class CustomerEndpoints
 
         me.MapGet("/offers", async (ClaimsPrincipal user, HttpContext context, CustomerOffersHandler offers) =>
         {
-            if (UserId(user) is not { } userId)
+            if (user.CustomerId() is not { } userId)
             {
-                return Unauthenticated(context);
+                return Results.Unauthorized();
             }
 
             var list = await offers.ListAsync(userId, context.RequestAborted);
@@ -165,20 +133,20 @@ public static class CustomerEndpoints
         });
 
         me.MapPost("/offers/{promotionId:guid}/opt-in", async (Guid promotionId, ClaimsPrincipal user, HttpContext context, CustomerOffersHandler offers) =>
-            UserId(user) is not { } userId ? Unauthenticated(context)
+            user.CustomerId() is not { } userId ? Results.Unauthorized()
             : await offers.OptInAsync(userId, promotionId, context.RequestAborted) switch
             {
                 null => Results.NoContent(),
-                "not_found" => Error.NotFound("offer_not_found", "That offer is not running.").ToHttpResult(context),
-                "restricted" => new Error("account_restricted", "Offers are not available on your account right now.", ErrorKind.Forbidden).ToHttpResult(context),
+                OptInRefusal.NotRunning => Error.NotFound("offer_not_found", "That offer is not running.").ToHttpResult(context),
+                OptInRefusal.Restricted => new Error("account_restricted", "Offers are not available on your account right now.", ErrorKind.Forbidden).ToHttpResult(context),
                 _ => Error.Conflict("marketing_opted_out", "Turn offers back on to opt in.").ToHttpResult(context),
             });
 
         me.MapDelete("/offers/{promotionId:guid}/opt-in", async (Guid promotionId, ClaimsPrincipal user, HttpContext context, CustomerOffersHandler offers) =>
         {
-            if (UserId(user) is not { } userId)
+            if (user.CustomerId() is not { } userId)
             {
-                return Unauthenticated(context);
+                return Results.Unauthorized();
             }
 
             await offers.OptOutAsync(userId, promotionId, context.RequestAborted);
@@ -187,9 +155,9 @@ public static class CustomerEndpoints
 
         me.MapPut("/marketing", async (MarketingBody body, ClaimsPrincipal user, HttpContext context, CustomerOffersHandler offers) =>
         {
-            if (UserId(user) is not { } userId)
+            if (user.CustomerId() is not { } userId)
             {
-                return Unauthenticated(context);
+                return Results.Unauthorized();
             }
 
             await offers.SetMarketingOptedOutAsync(userId, body.OptedOut, context.RequestAborted);
@@ -201,14 +169,41 @@ public static class CustomerEndpoints
 
     public sealed record MarketingBody(bool OptedOut);
 
-    /// <summary>A download holds at most this many lines; a narrower range gets the rest.</summary>
-    public const int MaxCsvLines = 10_000;
+    private sealed record StatementRequest(Account? Account, (DateTimeOffset From, DateTimeOffset To) Window, IReadOnlyCollection<PostingKind>? Kinds, IResult? Refusal = null)
+    {
+        public static StatementRequest Refused(IResult refusal) => new(null, default, null, refusal);
+    }
 
-    private static Guid? UserId(ClaimsPrincipal user) =>
-        Guid.TryParse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
+    private static async Task<StatementRequest> ResolveStatementAsync(
+        string? currency, DateTimeOffset? from, DateTimeOffset? to, string? type, ClaimsPrincipal user, HttpContext context, AccountsHandler accounts, TimeProvider time, bool csv)
+    {
+        if (user.CustomerId() is not { } userId)
+        {
+            return StatementRequest.Refused(Results.Unauthorized());
+        }
 
-    // A token without a subject is a service token, not a customer.
-    private static IResult Unauthenticated(HttpContext context) => Results.Unauthorized();
+        var window = StatementWindow.Resolve(from, to, time.GetUtcNow());
+        if (window.Problem is { } problem)
+        {
+            return StatementRequest.Refused(Error.Validation("invalid_range", problem).ToHttpResult(context));
+        }
+
+        if (csv && !StatementWindow.FitsImmediateCsv(window.From, window.To))
+        {
+            return StatementRequest.Refused(Error.Validation("export_range_too_long",
+                $"Exports over {StatementWindow.MaxCsvDays} days are coming soon. Pick {StatementWindow.MaxCsvDays} days or fewer.").ToHttpResult(context));
+        }
+
+        if (!StatementWindow.TryKinds(type, out var kinds))
+        {
+            return StatementRequest.Refused(Error.Validation("invalid_type", $"type must be one of {string.Join(", ", StatementWindow.Types.Keys)}.").ToHttpResult(context));
+        }
+
+        var account = (await accounts.ListAsync(userId, context.RequestAborted)).FirstOrDefault(a => currency is null || a.Currency == currency);
+        return account is null
+            ? StatementRequest.Refused(Error.NotFound("account_not_found", "You have no account in that currency.").ToHttpResult(context))
+            : new StatementRequest(account, (window.From, window.To), kinds);
+    }
 
     private static object View(Account a) => new { a.AccountId, a.Currency, a.Available, a.Reserved, a.Bonus };
 

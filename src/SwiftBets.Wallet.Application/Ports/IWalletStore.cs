@@ -25,7 +25,7 @@ public interface IWalletStore
     /// <paramref name="from"/> (inclusive) to <paramref name="to"/> (exclusive), only of <paramref name="kinds"/> when given.
     /// The balances after each are over the whole ledger, stored on the entries when posted (D196).
     /// </summary>
-    Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken, IReadOnlyCollection<PostingKind>? kinds = null);
+    Task<IReadOnlyList<StatementLine>> StatementAsync(Guid accountId, long? before, int limit, DateTimeOffset? from, DateTimeOffset? to, IReadOnlyCollection<PostingKind>? kinds, CancellationToken cancellationToken);
 }
 
 /// <summary>One posting's movement of an account's cash and bonus balances, and both balances after it.</summary>

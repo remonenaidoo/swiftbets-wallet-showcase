@@ -10,7 +10,7 @@ using SwiftBets.Wallet.Domain.Vouchers;
 
 namespace SwiftBets.Wallet.Api.Endpoints;
 
-/// <summary>Cash vouchers: customers buy and redeem under /me/wallet/vouchers; staff issue, search and void under /admin/wallet/vouchers (D168).</summary>
+/// <summary>Customers buy and redeem vouchers under /me/wallet/vouchers; staff issue, search and void them under /admin/wallet/vouchers.</summary>
 public static class VoucherEndpoints
 {
     public const string ReadPermission = "payments.read";
@@ -21,19 +21,19 @@ public static class VoucherEndpoints
         var me = endpoints.MapGroup("/me/wallet/vouchers").RequireAuthorization();
 
         me.MapGet(string.Empty, async (ClaimsPrincipal user, HttpContext context, IVoucherStore store, VoucherHandler vouchers, TimeProvider time) =>
-            UserId(user) is { } userId
+            user.CustomerId() is { } userId
                 ? Results.Ok((await store.ListForUserAsync(userId, 100, context.RequestAborted)).Select(v => CustomerView(v, vouchers.CodeFor(v, userId), userId, time.GetUtcNow())))
                 : Results.Unauthorized());
 
         me.MapGet("/{voucherId:guid}", async (Guid voucherId, ClaimsPrincipal user, HttpContext context, IVoucherStore store, VoucherHandler vouchers, TimeProvider time) =>
-            UserId(user) is not { } userId ? Results.Unauthorized()
+            user.CustomerId() is not { } userId ? Results.Unauthorized()
             : await store.GetAsync(voucherId, context.RequestAborted) is { } v && (v.PurchasedBy == userId || v.RedeemedBy == userId)
                 ? Results.Ok(CustomerView(v, vouchers.CodeFor(v, userId), userId, time.GetUtcNow()))
                 : Error.NotFound("voucher_not_found", "No voucher of yours with that id.").ToHttpResult(context));
 
         me.MapPost(string.Empty, async (BuyBody body, ClaimsPrincipal user, HttpContext context, VoucherHandler vouchers, TimeProvider time) =>
         {
-            if (UserId(user) is not { } userId)
+            if (user.CustomerId() is not { } userId)
             {
                 return Results.Unauthorized();
             }
@@ -44,18 +44,18 @@ public static class VoucherEndpoints
             }
 
             var outcome = await vouchers.BuyAsync(userId, key, body.Amount, body.Currency ?? "ZAR", body.RecipientEmail, context.RequestAborted);
-            return outcome.Voucher is { } v ? Results.Ok(CustomerView(v, outcome.Code, userId, time.GetUtcNow())) : Refusal(outcome, context);
+            return outcome.Voucher is { } v ? Results.Ok(CustomerView(v, outcome.Code, userId, time.GetUtcNow())) : Refusal(outcome, context, time);
         });
 
         me.MapPost("/redeem", async (RedeemBody body, ClaimsPrincipal user, HttpContext context, VoucherHandler vouchers, TimeProvider time) =>
         {
-            if (UserId(user) is not { } userId)
+            if (user.CustomerId() is not { } userId)
             {
                 return Results.Unauthorized();
             }
 
             var outcome = await vouchers.RedeemAsync(userId, body.Code, AddressSubject(context), context.RequestAborted);
-            return outcome.Voucher is { } v ? Results.Ok(CustomerView(v, null, userId, time.GetUtcNow())) : Refusal(outcome, context);
+            return outcome.Voucher is { } v ? Results.Ok(CustomerView(v, null, userId, time.GetUtcNow())) : Refusal(outcome, context, time);
         });
 
         var admin = endpoints.MapGroup("/admin/wallet/vouchers");
@@ -108,7 +108,7 @@ public static class VoucherEndpoints
             }
 
             var outcome = await vouchers.VoidAsync(voucherId, Operator(user), body.Reason.Trim(), context.RequestAborted);
-            return outcome.Voucher is { } v ? Results.Ok(StaffView(v, time.GetUtcNow())) : Refusal(outcome, context);
+            return outcome.Voucher is { } v ? Results.Ok(StaffView(v, time.GetUtcNow())) : Refusal(outcome, context, time);
         }).RequireAuthorization(WritePermission);
 
         admin.MapGet("/batches", async (IVoucherStore store, HttpContext context) =>
@@ -129,7 +129,7 @@ public static class VoucherEndpoints
 
             var source = body.Source switch { "retail" => VoucherSource.Retail, "promotion" => VoucherSource.Promotion, _ => VoucherSource.Purchase };
             var (batch, refusal) = await vouchers.IssueBatchAsync(Operator(user), key, body.Count, body.Amount, body.Currency ?? "ZAR", source, body.Note, context.RequestAborted);
-            return batch is null ? Refusal(refusal!, context) : Results.Ok(IssuedView(batch, time.GetUtcNow()));
+            return batch is null ? Refusal(refusal!, context, time) : Results.Ok(IssuedView(batch, time.GetUtcNow()));
         }).RequireAuthorization(WritePermission);
 
         // Reprinting a batch shows every code again, so it needs the write permission.
@@ -204,11 +204,11 @@ public static class VoucherEndpoints
         vouchers = batch.Vouchers.Select(x => new { x.Voucher.VoucherId, code = VoucherCode.Format(x.Code), status = x.Voucher.StatusAt(now), x.Voucher.ExpiresAt }),
     };
 
-    private static IResult Refusal(VoucherOutcome outcome, HttpContext context)
+    private static IResult Refusal(VoucherOutcome outcome, HttpContext context, TimeProvider time)
     {
         if (outcome.RetryAfter is { } until)
         {
-            context.Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling((until - DateTimeOffset.UtcNow).TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+            context.Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling((until - time.GetUtcNow()).TotalSeconds)).ToString(CultureInfo.InvariantCulture);
             return Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: outcome.Message, extensions: new Dictionary<string, object?> { ["code"] = outcome.Error });
         }
 
@@ -231,9 +231,6 @@ public static class VoucherEndpoints
             : context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         return "ip:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(address)))[..32];
     }
-
-    private static Guid? UserId(ClaimsPrincipal user) =>
-        Guid.TryParse(user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
     private static string Operator(ClaimsPrincipal user) => user.FindFirstValue("sub") ?? "unknown";
 

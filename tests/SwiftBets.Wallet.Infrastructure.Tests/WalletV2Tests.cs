@@ -171,8 +171,8 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
         await reserve.HandleAsync("cs_reserve", Punter, 2_000, "ZAR", "cs");
         await reserve.HoldWithdrawalAsync("wds_hold", Punter, 1_000, "ZAR", "wds");
 
-        var first = await store.StatementAsync(Punter, null, 2, null, null, CancellationToken.None);
-        var rest = await store.StatementAsync(Punter, first[^1].Sequence, 10, null, null, CancellationToken.None);
+        var first = await store.StatementAsync(Punter, null, 2, null, null, null, CancellationToken.None);
+        var rest = await store.StatementAsync(Punter, first[^1].Sequence, 10, null, null, null, CancellationToken.None);
 
         first.Select(l => (l.Kind, l.Amount, l.AvailableAfter)).ShouldBe([(PostingKind.WithdrawalHold, -1_000L, 102_000L), (PostingKind.Reserve, -2_000L, 103_000L)]);
         rest.Select(l => l.Kind).ShouldBe([PostingKind.Deposit, PostingKind.TopUp]);
@@ -187,8 +187,8 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
         await transfer.DepositAsync("deposit_r1", Punter, 5_000, "ZAR", "pay_r1");
         var now = _time.GetUtcNow();
 
-        var inside = await store.StatementAsync(Punter, null, 10, now.AddMinutes(-1), now.AddMinutes(1), CancellationToken.None);
-        var before = await store.StatementAsync(Punter, null, 10, now.AddDays(-2), now.AddDays(-1), CancellationToken.None);
+        var inside = await store.StatementAsync(Punter, null, 10, now.AddMinutes(-1), now.AddMinutes(1), null, CancellationToken.None);
+        var before = await store.StatementAsync(Punter, null, 10, now.AddDays(-2), now.AddDays(-1), null, CancellationToken.None);
 
         inside.Select(l => (l.Kind, l.AvailableAfter)).ShouldContain((PostingKind.Deposit, 105_000L));
         before.ShouldBeEmpty();
@@ -251,9 +251,9 @@ public sealed class WalletV2Tests(SqlServerFixture sql)
         await transfer.DepositAsync("deposit_t2", Punter, 2_000, "ZAR", "pay_t2");
         PostingKind[] deposits = [PostingKind.Deposit, PostingKind.TopUp];
 
-        var first = await store.StatementAsync(Punter, null, 2, null, null, CancellationToken.None, deposits);
-        var second = await store.StatementAsync(Punter, first[^1].Sequence, 2, null, null, CancellationToken.None, deposits);
-        var bets = await store.StatementAsync(Punter, null, 10, null, null, CancellationToken.None, [PostingKind.Credit]);
+        var first = await store.StatementAsync(Punter, null, 2, null, null, deposits, CancellationToken.None);
+        var second = await store.StatementAsync(Punter, first[^1].Sequence, 2, null, null, deposits, CancellationToken.None);
+        var bets = await store.StatementAsync(Punter, null, 10, null, null, [PostingKind.Credit], CancellationToken.None);
 
         first.Select(l => l.Amount).ShouldBe([2_000L, 1_000L]);
         second.Select(l => l.Kind).ShouldBe([PostingKind.TopUp]);

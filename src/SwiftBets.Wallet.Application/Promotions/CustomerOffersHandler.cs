@@ -23,23 +23,23 @@ public sealed class CustomerOffersHandler(IPromotionStore store, OfferEligibilit
         return new CustomerOffers(false, false, [.. offers]);
     }
 
-    /// <summary>Opts the customer in; the reason it was refused otherwise: not_found, opted_out or restricted.</summary>
-    public async Task<string?> OptInAsync(Guid userId, Guid promotionId, CancellationToken cancellationToken)
+    /// <summary>Opts the customer in, or says why not.</summary>
+    public async Task<OptInRefusal?> OptInAsync(Guid userId, Guid promotionId, CancellationToken cancellationToken)
     {
         var now = time.GetUtcNow();
         if (await store.GetAsync(promotionId, cancellationToken) is not { } record || !record.Promotion.IsRunning(now))
         {
-            return "not_found";
+            return OptInRefusal.NotRunning;
         }
 
         if (eligibility.IsRestricted(userId))
         {
-            return "restricted";
+            return OptInRefusal.Restricted;
         }
 
         if (await store.MarketingOptedOutAsync(userId, cancellationToken))
         {
-            return "opted_out";
+            return OptInRefusal.MarketingOptedOut;
         }
 
         await store.OptInAsync(promotionId, userId, now, cancellationToken);
@@ -50,6 +50,13 @@ public sealed class CustomerOffersHandler(IPromotionStore store, OfferEligibilit
 
     public Task SetMarketingOptedOutAsync(Guid userId, bool optedOut, CancellationToken cancellationToken) =>
         store.SetMarketingOptedOutAsync(userId, optedOut, time.GetUtcNow(), cancellationToken);
+}
+
+public enum OptInRefusal
+{
+    NotRunning,
+    Restricted,
+    MarketingOptedOut,
 }
 
 public sealed record CustomerOffer(Promotion Promotion, bool OptedIn, bool Awarded);

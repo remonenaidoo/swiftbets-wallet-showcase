@@ -261,7 +261,7 @@ public sealed class BonusWalletTests(SqlServerFixture sql)
 
         await offers.SetMarketingOptedOutAsync(Punter, true, CancellationToken.None);
 
-        (await offers.OptInAsync(Punter, promotion, CancellationToken.None)).ShouldBe("opted_out");
+        (await offers.OptInAsync(Punter, promotion, CancellationToken.None)).ShouldBe(OptInRefusal.MarketingOptedOut);
         (await offers.ListAsync(Punter, CancellationToken.None)).Offers.ShouldBeEmpty();
     }
 
