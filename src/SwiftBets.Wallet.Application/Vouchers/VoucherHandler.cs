@@ -51,30 +51,30 @@ public sealed class VoucherHandler(
             var locked = await transaction.LockAccountAsync(account.AccountId);
             if (locked is null || WellKnownAccounts.VouchersFor(currency) is not { } liability)
             {
-                return (WalletFailure.AccountNotFound, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.AccountNotFound);
             }
 
             if (locked.IsBlacklisted)
             {
-                return (WalletFailure.AccountBlacklisted, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.AccountBlacklisted);
             }
 
             var now = time.GetUtcNow();
             if (SpendPolicy.CheckVoucherPurchase(rules.For(locked.UserId).In(currency), now) is { } blocked)
             {
-                throw new WalletRefusedException(blocked.Failure, blocked.Detail);
+                return PostingResult.Refuse(blocked);
             }
 
             if (locked.Pay(amount, currency) is { } failure)
             {
-                return (failure, null, [], null, false);
+                return PostingResult.Refuse(failure);
             }
 
             var voucher = new Voucher(Guid.CreateVersion7(), issueKey, code[^4..], amount, currency, VoucherSource.Purchase, locked.AccountId, userId, null,
                 string.IsNullOrWhiteSpace(recipientEmail) ? null : recipientEmail.Trim(), VoucherStatus.Active, now, now + Voucher.Lifetime);
             await transaction.InsertVoucherAsync(voucher, VoucherCode.Hash(code));
-            return (null, new Posting(Guid.CreateVersion7(), PostingKind.VoucherPurchase, issueKey, $"voucher {voucher.VoucherId}",
-                [new(locked.AccountId, Bucket.Available, -amount), new(liability, Bucket.Available, amount)]), [locked], null, false);
+            return PostingResult.Post(new Posting(Guid.CreateVersion7(), PostingKind.VoucherPurchase, issueKey, $"voucher {voucher.VoucherId}",
+                [new(locked.AccountId, Bucket.Available, -amount), new(liability, Bucket.Available, amount)]), [locked]);
         });
 
         if (outcome.Failure is { } refused)
@@ -132,31 +132,30 @@ public sealed class VoucherHandler(
             var at = time.GetUtcNow();
             if (current is null || current.Status != VoucherStatus.Active || current.IsExpired(at))
             {
-                return (WalletFailure.InvalidState, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.InvalidState);
             }
 
             var locked = await transaction.LockAccountAsync(account.AccountId);
             if (locked is null)
             {
-                return (WalletFailure.AccountNotFound, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.AccountNotFound);
             }
 
             if (locked.Receive(current.Amount, current.Currency) is { } failure)
             {
-                return (failure, null, [], null, false);
+                return PostingResult.Refuse(failure);
             }
 
             // Redeeming puts money in to bet with, so it is judged and counted like a deposit.
             if (SpendPolicy.CheckDeposit(rules.For(locked.UserId).In(locked.Currency), await transaction.GetSpendAsync(locked.AccountId, at), current.Amount, at) is { } refusal)
             {
-                throw new WalletRefusedException(refusal.Failure, refusal.Detail,
-                    refusal.Limit is { } hit ? new LimitHit(locked.UserId, hit, "deposit", current.Amount, locked.Currency) : null);
+                return PostingResult.Refuse(refusal, LimitHit.From(refusal, locked, "deposit", current.Amount));
             }
 
             await transaction.AddSpendAsync(locked.AccountId, at, 0, 0, current.Amount);
             await transaction.UpdateVoucherAsync(current with { Status = VoucherStatus.Redeemed, RedeemedBy = userId, RedeemedAt = at });
-            return (null, new Posting(Guid.CreateVersion7(), PostingKind.VoucherRedeem, key, $"voucher {current.VoucherId}",
-                [new(WellKnownAccounts.VouchersFor(current.Currency)!.Value, Bucket.Available, -current.Amount), new(locked.AccountId, Bucket.Available, current.Amount)]), [locked], null, false);
+            return PostingResult.Post(new Posting(Guid.CreateVersion7(), PostingKind.VoucherRedeem, key, $"voucher {current.VoucherId}",
+                [new(WellKnownAccounts.VouchersFor(current.Currency)!.Value, Bucket.Available, -current.Amount), new(locked.AccountId, Bucket.Available, current.Amount)]), [locked]);
         });
 
         if (outcome.Failure is { } refused)
@@ -213,8 +212,8 @@ public sealed class VoucherHandler(
                 var voucher = new Voucher(Guid.CreateVersion7(), issueKey, code[^4..], amount, currency, source, from.Value, null, batch.BatchId, null,
                     VoucherStatus.Active, now, now + Voucher.Lifetime);
                 await transaction.InsertVoucherAsync(voucher, VoucherCode.Hash(code));
-                return (null, new Posting(Guid.CreateVersion7(), PostingKind.VoucherIssue, issueKey, $"voucher batch {batch.BatchId}",
-                    [new(from.Value, Bucket.Available, -amount), new(liability, Bucket.Available, amount)]), [], null, false);
+                return PostingResult.Post(new Posting(Guid.CreateVersion7(), PostingKind.VoucherIssue, issueKey, $"voucher batch {batch.BatchId}",
+                    [new(from.Value, Bucket.Available, -amount), new(liability, Bucket.Available, amount)]), []);
             });
             if (outcome.Failure is { } failure)
             {
@@ -255,7 +254,7 @@ public sealed class VoucherHandler(
             var current = await transaction.LockVoucherAsync(voucherId);
             if (current is null || current.Status != VoucherStatus.Active)
             {
-                return (WalletFailure.InvalidState, null, [], null, false);
+                return PostingResult.Refuse(WalletFailure.InvalidState);
             }
 
             // A bought voucher goes back to the buyer's balance; an issued one back to funding or the house.
@@ -265,15 +264,15 @@ public sealed class VoucherHandler(
                 var buyer = await transaction.LockAccountAsync(current.SourceAccountId);
                 if (buyer is null || buyer.Receive(current.Amount, current.Currency) is not null)
                 {
-                    return (buyer is null ? WalletFailure.AccountNotFound : WalletFailure.AccountBlacklisted, null, [], null, false);
+                    return PostingResult.Refuse(buyer is null ? WalletFailure.AccountNotFound : WalletFailure.AccountBlacklisted);
                 }
 
                 changed = [buyer];
             }
 
             await transaction.UpdateVoucherAsync(current with { Status = VoucherStatus.Voided, VoidedBy = operatorId, VoidReason = reason, VoidedAt = time.GetUtcNow() });
-            return (null, new Posting(Guid.CreateVersion7(), PostingKind.VoucherVoid, key, $"voucher {voucherId} voided",
-                [new(WellKnownAccounts.VouchersFor(current.Currency)!.Value, Bucket.Available, -current.Amount), new(current.SourceAccountId, Bucket.Available, current.Amount)]), changed, null, false);
+            return PostingResult.Post(new Posting(Guid.CreateVersion7(), PostingKind.VoucherVoid, key, $"voucher {voucherId} voided",
+                [new(WellKnownAccounts.VouchersFor(current.Currency)!.Value, Bucket.Available, -current.Amount), new(current.SourceAccountId, Bucket.Available, current.Amount)]), changed);
         });
 
         return outcome.Failure is { } failure ? Refused(failure, outcome.Detail) : VoucherOutcome.Ok((await vouchers.GetAsync(voucherId, cancellationToken))!);
